@@ -17,10 +17,12 @@ import type { DecorationSet, ViewUpdate } from "@codemirror/view"
 import { frontmatterSpan } from "./frontmatter-span"
 import type { FrontmatterSpan } from "./frontmatter-span"
 
-type LineKind = "blank" | "heading" | "separator" | "text"
+type LineKind = "blank" | "heading" | "separator" | "quote" | "center" | "text"
 
 const para = Decoration.line({ class: "mb-para" })
 const blankLine = Decoration.line({ class: "mb-blank" })
+
+const CENTER_PATTERN = /^->\s?[\s\S]*?\s?<-\s*$/
 
 function classify(text: string): LineKind {
   switch (text.trim().length === 0) {
@@ -33,6 +35,20 @@ function classify(text: string): LineKind {
   switch (text === "---") {
     case true:
       return "separator"
+    case false:
+      break
+  }
+
+  switch (text.startsWith(">")) {
+    case true:
+      return "quote"
+    case false:
+      break
+  }
+
+  switch (CENTER_PATTERN.test(text)) {
+    case true:
+      return "center"
     case false:
       break
   }
@@ -69,6 +85,8 @@ function build(view: EditorView): DecorationSet {
           continue
         case "heading":
         case "separator":
+        case "quote":
+        case "center":
           continue
         case "text":
           break
@@ -121,10 +139,14 @@ function indented(state: EditorState, fm: FrontmatterSpan, lineNumber: number): 
     switch (kind) {
       case "blank":
         continue
+      // A paragraph following prose or an extract indents; one opening after
+      // a heading, a separator, or a centred line sits flush.
       case "text":
+      case "quote":
         return true
       case "heading":
       case "separator":
+      case "center":
         return false
     }
   }

@@ -57,6 +57,9 @@ bun run dist        # signature-less .dmg and .zip into release/
 | `#` heading | the title page — title and frontmatter author on their own A5 page |
 | `##` heading | a chapter — just the name; mbook numbers it (`Capítulo N`) |
 | `---` on its own line | separator ornament |
+| `**bold**` / `*italic*` | true Literata weights and italics; the marks lift while you write |
+| `> quote` | a set extract — inset from both edges, a step smaller |
+| `-> text <-` | a centred line — dedications, epigraph credits, part marks |
 | `--` then a letter | `—` travessão |
 | straight quotes `"` `'` | smart quotes, automatically |
 | `title:` / `author:` frontmatter | collapsed title · author strip |

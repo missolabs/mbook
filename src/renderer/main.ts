@@ -5,6 +5,7 @@
 import "./styles/app.css"
 
 import "@fontsource-variable/literata"
+import "@fontsource-variable/literata/wght-italic.css"
 import "@fontsource-variable/inter"
 import "@fontsource-variable/jetbrains-mono"
 

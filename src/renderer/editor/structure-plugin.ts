@@ -197,6 +197,12 @@ function collect(
     case "HorizontalRule":
       rule(state, node, items)
       return
+    case "Blockquote":
+      quote(state, node, items)
+      return
+    case "Paragraph":
+      centered(state, node, items)
+      return
     case "Emphasis":
       emphasis(state, node, items)
       return
@@ -280,6 +286,90 @@ function rule(state: EditorState, node: SyntaxNodeRef, items: Range<Decoration>[
   }
 
   items.push(Decoration.replace({ widget: new OrnamentWidget() }).range(node.from, node.to))
+}
+
+// A block quotation — the set-book extract: every line of the quote carries
+// mb-quote (indented both sides, slightly smaller), and each line's "> " mark
+// lifts unless the cursor touches that line.
+function quote(state: EditorState, node: SyntaxNodeRef, items: Range<Decoration>[]): void {
+  const firstLine = state.doc.lineAt(node.from).number
+  const lastLine = state.doc.lineAt(node.to).number
+
+  for (let n = firstLine; n <= lastLine; n += 1) {
+    const line = state.doc.line(n)
+
+    items.push(Decoration.line({ class: "mb-quote" }).range(line.from))
+
+    const lineSpan: Span = { from: line.from, to: line.to }
+
+    switch (revealed(selectionSpans(state), lineSpan)) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    const mark = quoteMarkLength(line.text)
+
+    switch (mark === 0) {
+      case true:
+        continue
+      case false:
+        items.push(Decoration.replace({}).range(line.from, line.from + mark))
+        continue
+    }
+  }
+}
+
+function quoteMarkLength(text: string): number {
+  switch (text.startsWith("> ")) {
+    case true:
+      return 2
+    case false:
+      break
+  }
+
+  switch (text.startsWith(">")) {
+    case true:
+      return 1
+    case false:
+      return 0
+  }
+}
+
+// A centred line, iA-Writer style: "-> dedication <-". The paragraph centres
+// on the measure and its arrow marks lift unless the cursor touches the line.
+const CENTER_PATTERN = /^->\s?([\s\S]*?)\s?<-\s*$/
+
+function centered(state: EditorState, node: SyntaxNodeRef, items: Range<Decoration>[]): void {
+  const line = state.doc.lineAt(node.from)
+
+  const match = CENTER_PATTERN.exec(line.text)
+
+  switch (match === null) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  items.push(Decoration.line({ class: "mb-center" }).range(line.from))
+
+  const lineSpan: Span = { from: line.from, to: line.to }
+
+  switch (revealed(selectionSpans(state), lineSpan)) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const leading = line.text.length - line.text.replace(/^->\s?/, "").length
+  const trailing = line.text.length - line.text.replace(/\s?<-\s*$/, "").length
+
+  items.push(Decoration.replace({}).range(line.from, line.from + leading))
+
+  items.push(Decoration.replace({}).range(line.to - trailing, line.to))
 }
 
 function emphasis(state: EditorState, node: SyntaxNodeRef, items: Range<Decoration>[]): void {
