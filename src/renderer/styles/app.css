@@ -199,7 +199,7 @@
    un-layered token definition by source order and vibrancy blurs through body.
    html itself is clear so only body's var(--m-bg) paints the material. */
 html.theme-dark {
-  --m-bg: rgba(19, 19, 20, 0.86);
+  --m-bg: rgba(19, 19, 20, 0.8);
   --mb-serif: "Literata Variable", Georgia, serif;
   /* The A5 sheet's surface — a whisper above the backdrop so the page reads as
      an object without breaking the vibrancy; its trim is marked by --m-hair. */
