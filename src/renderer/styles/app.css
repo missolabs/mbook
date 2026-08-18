@@ -327,6 +327,18 @@ html {
   color: var(--m-mist);
 }
 
+/* Book paragraph rhythm (paragraph-plugin.ts): continuation paragraphs carry
+   the classic first-line indent; the blank source lines between paragraphs
+   collapse to half a line so the page reads with indents, not gaps. The
+   pagination model counts blanks as half-lines to match. */
+.mb-para {
+  text-indent: 1.4em;
+}
+
+.mb-blank {
+  line-height: 0.8;
+}
+
 /* The revealed (cursor-inside) frontmatter: raw YAML, dimmed to mono meta.
    Page-internal type follows the sheet's zoom factor. */
 .mb-fm {

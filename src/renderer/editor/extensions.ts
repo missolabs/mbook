@@ -7,6 +7,7 @@ import type { Extension } from "@codemirror/state"
 import { tags } from "@lezer/highlight"
 import { frontmatterField } from "./frontmatter-field"
 import { structurePlugin } from "./structure-plugin"
+import { paragraphPlugin } from "./paragraph-plugin"
 import { createTypingAids } from "./aids-extension"
 import { pageJointsField } from "./page-breaks"
 import { pageLayer } from "./page-layer"
@@ -34,7 +35,10 @@ const bookTheme = EditorView.theme({
   ".cm-scroller": {
     overflow: "auto",
     fontFamily: "var(--mb-serif)",
-    lineHeight: "1.7",
+    // Book leading: print A5 runs ~1.35; 1.6 is the screen compromise that
+    // keeps the manuscript readable while the page fills like a set book.
+    // The pagination model derives its lines-per-page from this.
+    lineHeight: "1.6",
     paddingTop: "40px",
     paddingBottom: "45vh",
   },
@@ -55,6 +59,12 @@ const bookTheme = EditorView.theme({
     padding:
       "calc(19mm * var(--mb-zoom, 1)) calc(16.5mm * var(--mb-zoom, 1)) 0",
     backgroundColor: "transparent",
+    // Set books justify and hyphenate; headings and ornaments opt back out
+    // through their own text-align. Hyphenation needs the lang attribute the
+    // content carries (contentAttributes below).
+    textAlign: "justify",
+    hyphens: "auto",
+    "-webkit-hyphens": "auto",
   },
   // The base theme pads lines 6px left / 2px right — a caret allowance for
   // gutterless buffers. Inside the sheet's 18mm margins it only skews the
@@ -92,7 +102,10 @@ export function createBookExtensions(): Extension[] {
     pageJointsField,
     pageLayer,
     structurePlugin,
+    paragraphPlugin,
     createTypingAids(),
+    // Portuguese hyphenation patterns hang off the content's language.
+    EditorView.contentAttributes.of({ lang: "pt-BR" }),
     history(),
     keymap.of([...defaultKeymap, ...historyKeymap]),
     EditorView.lineWrapping,
