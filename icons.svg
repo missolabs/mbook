@@ -1,0 +1,49 @@
+<!-- mdesign icons — 20-grid monoline, stroke 1.6, butt caps (set by .m-icon),
+     currentColor. Use: <svg class="m-icon"><use href="…/marks/icons.svg#i-search"/></svg>
+     Draw new icons on the same grid: live area 3..17, no fills except the
+     marked dots/theme halves. -->
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-search" viewBox="0 0 20 20"><circle cx="9" cy="9" r="5"/><path d="M13 13l4 4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></symbol>
+  <symbol id="i-x" viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"/></symbol>
+  <symbol id="i-check" viewBox="0 0 20 20"><path d="M4 10.5L8.5 15 16 5.5"/></symbol>
+  <symbol id="i-send" viewBox="0 0 20 20"><path d="M10 16V4M5 9l5-5 5 5"/></symbol>
+  <symbol id="i-reply" viewBox="0 0 20 20"><path d="M8 5l-5 5 5 5M3 10h8c3.3 0 6 2.7 6 6"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 20 20"><path d="M3 4h14v4H3zM5 8v8h10V8M8 11h4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 20 20"><path d="M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10"/></symbol>
+  <symbol id="i-star" viewBox="0 0 20 20"><path d="M10 3l2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7L3.2 8l4.7-.7z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 20 20"><path d="M3 11h4c0 1.7 1.3 3 3 3s3-1.3 3-3h4M3 11V5h14v6M3 11v4h14v-4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 20 20"><path d="M3 5h5l2 2h7v8H3z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 20 20"><path d="M5 3h7l3 3v11H5zM12 3v3h3"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 20 20"><path d="M4 16l1-4 9-9 3 3-9 9zM11 6l3 3"/></symbol>
+  <symbol id="i-link" viewBox="0 0 20 20"><path d="M7.5 12.5l5-5M9 15l-2 2a3.5 3.5 0 0 1-5-5l2-2M11 5l2-2a3.5 3.5 0 0 1 5 5l-2 2"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14"/><circle cx="7" cy="6" r="1.8"/><circle cx="13" cy="10" r="1.8"/><circle cx="6" cy="14" r="1.8"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 20 20"><path d="M5 8l5 5 5-5"/></symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 20 20"><path d="M5 12l5-5 5 5"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 20 20"><path d="M12 5l-5 5 5 5"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 20 20"><path d="M8 5l5 5-5 5"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 20 20"><path d="M3 10h14M11 4l6 6-6 6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 20 20"><path d="M8 4H4v12h12v-4M11 3h6v6M17 3l-8 8"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 20 20"><rect x="7" y="7" width="9" height="9"/><path d="M5 13H4V4h9v1"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 20 20"><path d="M17 4v4h-4M3 16v-4h4M4.5 8a6 6 0 0 1 10.2-2.6L17 8M15.5 12a6 6 0 0 1-10.2 2.6L3 12"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 20 20"><path d="M14 8.5l-5.5 5.5a3 3 0 0 1-4.2-4.2L11 3.1a2.1 2.1 0 0 1 3 3l-6.3 6.2a1.05 1.05 0 0 1-1.5-1.5l5.3-5.3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5"/><path d="M10 6v4l3 2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 20 20"><circle cx="10" cy="7" r="3.2"/><path d="M4 17c0-3 2.7-4.6 6-4.6s6 1.6 6 4.6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 20 20"><circle cx="7.5" cy="7.5" r="2.8"/><path d="M2.5 16.5c0-2.6 2.2-4 5-4s5 1.4 5 4M12.5 5a2.8 2.8 0 0 1 0 5.4M13.5 12.7c2.3.3 4 1.7 4 3.8"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 20 20"><path d="M2.5 10s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5z"/><circle cx="10" cy="10" r="2.2"/></symbol>
+  <symbol id="i-download" viewBox="0 0 20 20"><path d="M10 3v10M6 9l4 4 4-4M4 17h12"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 20 20"><path d="M10 13V3M6 7l4-4 4 4M4 17h12"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 20 20"><path d="M3 5h14l-5.5 6v5l-3-1.6V11z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 20 20"><circle cx="4" cy="10" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.4" fill="currentColor" stroke="none"/><circle cx="16" cy="10" r="1.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 20 20"><path d="M7 3h6l-1 5 3 3H5l3-3zM10 11v6"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 20 20"><path d="M3 10V3h7l7 7-7 7z"/><circle cx="7" cy="7" r="1.3"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 20 20"><rect x="3" y="5" width="14" height="12"/><path d="M3 9h14M7 3v4M13 3v4"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 20 20"><path d="M4 15h12c-1-1-2-2-2-5a4 4 0 0 0-8 0c0 3-1 4-2 5zM8 15a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 20 20"><rect x="3" y="5" width="14" height="10"/><path d="M3 6l7 5.5L17 6"/></symbol>
+  <symbol id="i-pad" viewBox="0 0 20 20"><rect x="5" y="3" width="10" height="14"/><path d="M7.5 8h5M7.5 11h5"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12"/><path d="M8 4v12"/></symbol>
+  <symbol id="i-pane-source" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12"/><path d="M6 8h6M6 10.5h8M6 13h5"/></symbol>
+  <symbol id="i-pane-split" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12"/><path d="M10 4v12"/></symbol>
+  <symbol id="i-pane-preview" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12"/><path d="M6 8h8M6 11h8M6 14h4"/><path d="M3 6.5h14"/></symbol>
+</svg>

@@ -1,0 +1,2406 @@
+/* ============================================================================
+   mdesign — the m family design language
+   ----------------------------------------------------------------------------
+   GENERATED from packages/css/src — do not edit here.
+   Rebuild: bun run build
+
+   Three layers in one file:
+     1. tokens        — CSS custom properties on html.theme-dark/.theme-light.
+                        Plain CSS: works in any browser with no build step.
+     2. @theme inline — maps tokens into Tailwind v4 utility names. Inert
+                        outside a Tailwind build.
+     3. components    — generic UI in @layer components, class-prefixed m-*.
+                        Framework-free; React/Electron/plain HTML all consume
+                        the same classes.
+
+   Tailwind v4 usage:
+       @import "tailwindcss";
+       @import "./mdesign.css";
+
+   Theme switching is class-driven (html.theme-dark / html.theme-light) at the
+   variable level, so tailwind dark: variants are unnecessary — every utility
+   and component flips with the tokens.
+
+   Laws (binding — full text in spec/01-foundation.html):
+     R1  gold marks life only — carets, presence, unread, sync, the open item's
+         2px edge, checked controls, the spinner's arc, the loader's fill.
+         Focus is quiet: rings and borders strengthen to fog, never gold.
+         No second accent exists.
+     R2  wordmarks: typed [m] + noun in chrome (brackets mist, m ink 700, noun
+         fog 400). The round marks (curl, rose) live in icons, favicons, dock
+         and og artwork only. Never gold, never gradient, never tilted.
+     R3  three neutrals per theme — surface, panel, well. Hover and selection
+         are tints of the same surface, never a new color.
+     R4  the hairline is the only line. One shadow exists; the overlay owns it.
+         Windows and panes never cast.
+     R5  radius 0 on panes, 4 on controls, 6 on overlays. Nothing else.
+     R6  motion belongs to life: the caret blink, the live-dot breath, the
+         spinner's turn, the loader's sweep. Nothing else moves — skeletons
+         never shimmer; prefers-reduced-motion stops them all.
+     R7  a new m app ships in the chassis on day one — no new colors, no new
+         faces.
+   ========================================================================== */
+
+
+/* ===== tokens — the three neutrals, three inks, gold, hairlines and the fix scale ===== */
+
+/* tokens — plain custom properties on html.theme-dark / html.theme-light.
+   No build step, no Tailwind required: any browser reads these directly.
+
+   Three neutrals per theme (surface · panel · well) and three inks
+   (ink · fog · mist). Every value below is measured — tests/contrast.test.ts
+   asserts each ink clears WCAG AA (4.5:1) on all three surfaces of its theme
+   and fails CI if a token drifts under. */
+
+:root,
+html.theme-dark {
+  color-scheme: dark;
+
+  --m-bg: #131314;
+  --m-panel: #0f0f10;
+  --m-well: #0c0c0d;
+
+  --m-ink: #d4d4d8; /* body — 14.4:1 on bg */
+  --m-fog: #a6a6ac; /* secondary — 7.6:1 on bg */
+  --m-mist: #878790; /* meta only, never body — 4.5:1 on a tinted row */
+
+  --m-hair: rgba(255, 255, 255, 0.06);
+  --m-hair-strong: rgba(255, 255, 255, 0.09);
+
+  --m-gold: #e8c268; /* life only (R1) — never text */
+  --m-on-gold: #131314;
+
+  /* the identity scale (R8) — encodes WHICH, never how alive. Labels, peers,
+     syntax tokens. Never state, emphasis, or interaction: those stay neutral
+     and gold. Yellow is deliberately absent so gold keeps its meaning alone.
+
+     Every value clears AA (4.5:1) as TEXT on all three surfaces and their
+     tinted composites — syntax highlighting is text, so the graphic floor
+     would not have been enough. tests/contrast.test.ts holds the line.
+
+     Searched, not picked: eight hues spread at >=30deg with gold's arc
+     excluded, each tuned to gold's own chroma (128 of 255 from grey) and held
+     inside one narrow contrast band. Maximising chroma instead produced pure
+     hues — #ff00ff, #0040ff — which is the look of a default palette. */
+  --m-id-1: #f08170; /* coral */
+  --m-id-2: #36a121; /* green */
+  --m-id-3: #21a181; /* teal */
+  --m-id-4: #4fafcf; /* cyan */
+  --m-id-5: #7a9afa; /* blue */
+  --m-id-6: #a97afa; /* violet */
+  --m-id-7: #f070f0; /* magenta */
+  --m-id-8: #fa7aaf; /* rose */
+  --m-on-id: #131314;
+
+  --m-tint: rgba(255, 255, 255, 0.04);
+  --m-tint-2: rgba(255, 255, 255, 0.06);
+
+  --m-overlay-bg: #1b1b1d;
+  --m-overlay-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.55);
+  --m-scrim: rgba(0, 0, 0, 0.4);
+
+  --m-solid: #e7e7ea;
+  --m-on-solid: #131314;
+
+  --m-pattern-ink: rgba(255, 255, 255, 0.05);
+
+  --m-scroll-thumb: rgba(255, 255, 255, 0.13);
+  --m-scroll-thumb-hover: rgba(255, 255, 255, 0.22);
+
+  --m-tile-ring: rgba(255, 255, 255, 0.06);
+}
+
+html.theme-light {
+  color-scheme: light;
+
+  --m-bg: #ffffff;
+  --m-panel: #f6f6f7;
+  --m-well: #f0f0f2;
+
+  --m-ink: #1e1e22; /* body — 15.9:1 on bg */
+  --m-fog: #52525a; /* secondary — 7.7:1 on bg */
+  --m-mist: #64646e; /* meta only, never body — 4.5:1 on a tinted row */
+
+  --m-hair: rgba(0, 0, 0, 0.06);
+  --m-hair-strong: rgba(0, 0, 0, 0.11);
+
+  /* #b88700 read 2.99:1 on the well — under the 3:1 floor a meaningful
+     graphic has to clear. Two steps darker and every light surface passes. */
+  --m-gold: #b08200;
+  --m-on-gold: #ffffff;
+
+  /* the identity scale (R8) — the same eight hues at the same angles, searched
+     against the light theme's own window rather than inverted from dark. */
+  --m-id-1: #b41b04; /* red */
+  --m-id-2: #137000; /* green */
+  --m-id-3: #026e53; /* teal */
+  --m-id-4: #00678a; /* cyan */
+  --m-id-5: #133fc3; /* blue */
+  --m-id-6: #7232e2; /* violet */
+  --m-id-7: #ac02ac; /* magenta */
+  --m-id-8: #b4044d; /* rose */
+  --m-on-id: #ffffff;
+
+  --m-tint: rgba(0, 0, 0, 0.04);
+  --m-tint-2: rgba(0, 0, 0, 0.06);
+
+  --m-overlay-bg: #ffffff;
+  --m-overlay-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.2);
+  --m-scrim: rgba(0, 0, 0, 0.3);
+
+  --m-solid: #1e1e22;
+  --m-on-solid: #ffffff;
+
+  --m-pattern-ink: rgba(0, 0, 0, 0.055);
+
+  --m-scroll-thumb: rgba(0, 0, 0, 0.17);
+  --m-scroll-thumb-hover: rgba(0, 0, 0, 0.3);
+
+  --m-tile-ring: rgba(0, 0, 0, 0.08);
+}
+
+:root {
+  --m-font-sans: "Inter", -apple-system, "Segoe UI", sans-serif;
+  --m-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* the fix scale — fixed widths for harmony (4px grid). Containers hug
+     their content by default; .m-fill stretches; a fix class pins width. */
+  --m-fix-1: 120px;
+  --m-fix-2: 184px;
+  --m-fix-3: 248px;
+  --m-fix-4: 320px;
+
+  /* the chassis (R7) — every m app is rail · list · pane. An app widens its
+     rail by setting the variable, never by re-authoring the shell. */
+  --m-rail-w: var(--m-fix-3);
+  --m-list-w: 360px;
+  --m-tile-min: 300px;
+
+  /* alignment — one gap for every container, overridden per instance by the
+     .m-gap-* step classes. One default beats five, and a view where the stack
+     and the cluster disagree by 4px is a view someone will re-tune forever. */
+  --m-gap: 12px;
+  --m-field-min: 240px;
+  --m-measure: 68ch;
+
+  /* THE HEIGHT SCALE. Two things that read as the same size are the same
+     size. They were not: the segmented button stood 24px while the small
+     button stood 26, and the rail row stood 30 while the list row stood 34 —
+     differences no component could have justified, because nothing named
+     them. Every fixed height in the system now comes from here.
+
+     controls — anything you click that holds a label */
+  --m-control-sm: 26px;
+  --m-control-md: 32px;
+  --m-control-lg: 40px;
+
+  /* a row you click in a list or a rail */
+  --m-row-h: 32px;
+
+  /* the chrome bands, above and below the shell */
+  --m-bar-h: 36px;
+  --m-statusbar-h: 22px;
+
+  /* a textarea's floor. Not on the control scale on purpose: every other
+     control is one line tall and this one is the exception that holds
+     several, so it is named rather than pretending to be a size it is not. */
+  --m-textarea-min: 60px;
+
+  /* inline markers — things that sit IN a line rather than being clicked.
+     Three steps because a 9.5px uppercase badge, a count pill and a chip you
+     can dismiss are genuinely different densities; naming them is what stops
+     the next one being invented at 20px. */
+  --m-bit-sm: 16px;
+  --m-bit: 18px;
+  --m-bit-lg: 22px;
+
+  /* the reading inset — the distance from a pane's chrome to the text inside
+     it. One value, because the two panes of a split are the case that gives
+     it away: mpad's editor started its first line 38px under the bar and the
+     preview beside it started at 54px, and nothing in the system said they
+     were supposed to agree. --m-measure decides how wide a reading column is;
+     this decides where it begins. */
+  --m-inset: 24px;
+
+  /* graphite artifacts (icon tiles, og cards) are theme-fixed */
+  --m-graphite: #131314;
+  --m-graphite-ink: #e7e7ea;
+  --m-graphite-fog: #8b8b94;
+  --m-graphite-gold: #e8c268;
+
+  /* the identity currently in force. An .m-id-* class rebinds it for its
+     subtree; everything that carries identity reads this one name, so a dot,
+     a flag and a token in the same row cannot disagree about which peer they
+     mean. Bound to the first step so an identity-bearing element that was
+     never assigned one still paints. */
+  --m-id: var(--m-id-1);
+
+  /* the two movements (R6) — one duration each, stopped by reduced-motion */
+  --m-turn: 0.9s;
+  --m-breath: 2.4s;
+}
+
+/* prefers-contrast: more — the hairline and the meta ink strengthen.
+   Nothing moves, nothing recolors: the same system, said louder. */
+@media (prefers-contrast: more) {
+  html.theme-dark,
+  :root {
+    --m-hair: rgba(255, 255, 255, 0.14);
+    --m-hair-strong: rgba(255, 255, 255, 0.22);
+    --m-mist: var(--m-fog);
+  }
+
+  html.theme-light {
+    --m-hair: rgba(0, 0, 0, 0.16);
+    --m-hair-strong: rgba(0, 0, 0, 0.26);
+    --m-mist: var(--m-fog);
+  }
+}
+
+
+/* ===== theme — @theme inline — tokens as utility names; inert without Tailwind ===== */
+
+/* tailwind v4 mapping — maps tokens into utility names. Inert outside a
+   Tailwind build, so plain-CSS consumers can ship this file untouched.
+
+   Theme switching stays class-driven at the variable level
+   (html.theme-dark / html.theme-light), so `dark:` variants are unnecessary:
+   every utility and component flips with the tokens. */
+
+@theme inline {
+  --color-*: initial;
+  --color-surface: var(--m-bg);
+  --color-panel: var(--m-panel);
+  --color-well: var(--m-well);
+  --color-ink: var(--m-ink);
+  --color-fog: var(--m-fog);
+  --color-mist: var(--m-mist);
+  --color-hair: var(--m-hair);
+  --color-hair-strong: var(--m-hair-strong);
+  --color-gold: var(--m-gold);
+  --color-on-gold: var(--m-on-gold);
+  --color-tint: var(--m-tint);
+  --color-tint-2: var(--m-tint-2);
+  --color-overlay: var(--m-overlay-bg);
+  --color-graphite: var(--m-graphite);
+  --color-graphite-ink: var(--m-graphite-ink);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-sans: var(--m-font-sans);
+  --font-mono: var(--m-font-mono);
+
+  /* 4px grid — p-1 = 4px, gap-3 = 12px, h-9 = 36px … */
+  --spacing: 4px;
+
+  /* type roles, not sizes-for-sizes'-sake: text-caption … text-display */
+  --text-*: initial;
+  --text-caption: 10.5px;
+  --text-caption--line-height: 1.5;
+  --text-meta: 11px;
+  --text-meta--line-height: 1;
+  --text-label: 12.5px;
+  --text-label--line-height: 1;
+  --text-ui: 13px;
+  --text-ui--line-height: 1.5;
+  --text-body: 14px;
+  --text-body--line-height: 1.6;
+  --text-prose: 16px;
+  --text-prose--line-height: 1.75;
+  --text-title: 21px;
+  --text-title--line-height: 1.45;
+  --text-display: 34px;
+  --text-display--line-height: 1.25;
+
+  --radius-*: initial;
+  --radius-none: 0;
+  --radius-control: 4px;
+  --radius-overlay: 6px;
+
+  --shadow-*: initial;
+  --shadow-overlay: var(--m-overlay-shadow);
+}
+
+
+/* ===== base — quiet focus, selection, forced-colors ===== */
+
+/* base — element defaults. Must stay in @layer base: un-layered CSS beats
+   @layer components and would strip component styling (see README, consumer
+   rules). Tailwind's preflight already complies.
+
+   THE RESET. The system used to have none, and borrowed Tailwind's preflight
+   without saying so. That made "plain-CSS consumers ship the same file" untrue
+   in a way nothing caught, because the only consumer that had been tried ran
+   Tailwind. Dropping Tailwind from an app broke geometry in three places at
+   once:
+
+   · every fixed-height element with a border came out a pixel taller —
+     .m-bar 36px measured 37, .m-statusbar 22px measured 23 — because
+     box-sizing fell back to content-box
+   · .m-app is 100dvh, and the UA's default body margin of 8px added 16px on
+     top of a full-viewport grid, so every page scrolled and the statusbar sat
+     below the fold
+   · controls fell back to the UA's own font instead of the system's
+
+   Worse than any single symptom: an app WITH Tailwind and an app WITHOUT it
+   rendered the same components at different sizes, which is the one thing a
+   design system exists to prevent. These four rules are the floor the
+   components are authored against. Tailwind's preflight sets the same values,
+   so consumers that have it lose nothing by these being here. */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+  }
+
+  /* the UA gives form controls their own face and colour; every m component
+     sets its own, but an app's bare <input> should start from the system's */
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Focus is quiet — fog, never gold (gold is reserved for life, R1).
+     2px at 2px offset clears WCAG 2.4.11 focus-appearance on every surface. */
+  :focus-visible {
+    outline: 2px solid var(--m-fog);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--m-tint-2);
+    /* biome-ignore lint/suspicious/noDuplicateProperties: progressive enhancement — an engine without color-mix() keeps the tint above */
+    background: color-mix(in srgb, var(--m-gold) 24%, transparent);
+  }
+}
+
+/* Windows high contrast / forced-colors: the OS owns color there. Give it
+   real borders to paint — our hairlines are alpha and get flattened away —
+   and keep focus visible in the system's own accent. */
+@media (forced-colors: active) {
+  @layer base {
+    :focus-visible {
+      outline: 2px solid Highlight;
+    }
+  }
+}
+
+
+/* ===== a11y — screen-reader-only text and the inset focus ring ===== */
+
+/* a11y helpers — the small pieces every accessible interface needs.
+
+   .m-sr-only  visible to assistive tech, invisible on screen. Icon-only
+               controls carry their name here (or in aria-label); .m-tooltip
+               is decoration and never the accessible name.
+   .m-focus-in draws the quiet focus ring inside the box, for controls whose
+               own border is the affordance (inputs, the composer). */
+
+@layer components {
+  .m-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* …but reachable again when focused (skip links) */
+  .m-sr-only-focusable:focus-visible {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .m-focus-in {
+    border-color: var(--m-fog);
+    box-shadow: 0 0 0 1px var(--m-fog);
+  }
+}
+
+
+/* ===== sizing — hug by default, .m-fill, the fix scale ===== */
+
+/* sizing — hug by default · fill · the fix scale.
+
+   Containers hug their content. `.m-fill` stretches to the parent.
+   The fix scale pins width so paired controls stay equal by law rather
+   than by a hand-tuned percentage. */
+
+@layer components {
+  .m-fill {
+    width: 100%;
+  }
+
+  .m-fix-1 {
+    width: var(--m-fix-1);
+  }
+  .m-fix-2 {
+    width: var(--m-fix-2);
+  }
+  .m-fix-3 {
+    width: var(--m-fix-3);
+  }
+  .m-fix-4 {
+    width: var(--m-fix-4);
+  }
+}
+
+
+/* ===== align — stack · cluster · split · fields · measure · middle, and the cross-axis modifiers ===== */
+
+/* alignment — the containers that put differently-sized things in order.
+
+   Until now every component baked its own align-items and an app had no way to
+   say "these two line up" without writing CSS of its own. These are the five
+   shapes that cover it, plus modifiers that state the cross axis outright.
+
+   All five take their gap from one token, so a stack and a cluster in the same
+   view breathe the same amount:
+
+       <div class="m-stack m-gap-4">          16px between rows
+       <div class="m-cluster m-gap-2">         8px between chips
+
+   The modifiers are deliberately plain names — align-items and align-content
+   are the two properties that decide whether a row of unequal things reads as
+   deliberate or as an accident, and the class should say which one it sets. */
+
+@layer components {
+  /* the gap scale — the 4px grid, named by step */
+  .m-gap-0 {
+    --m-gap: 0;
+  }
+  .m-gap-1 {
+    --m-gap: 4px;
+  }
+  .m-gap-2 {
+    --m-gap: 8px;
+  }
+  .m-gap-3 {
+    --m-gap: 12px;
+  }
+  .m-gap-4 {
+    --m-gap: 16px;
+  }
+  .m-gap-5 {
+    --m-gap: 24px;
+  }
+  .m-gap-6 {
+    --m-gap: 32px;
+  }
+
+  /* stack — vertical flow, one gap, nothing else */
+  .m-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--m-gap);
+  }
+
+  /* cluster — horizontal, wraps when it runs out of room, centred across */
+  .m-cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--m-gap);
+  }
+
+  /* split — leading content, then .m-push sends the rest to the far end */
+  .m-split {
+    display: flex;
+    align-items: center;
+    gap: var(--m-gap);
+  }
+
+  /* fields — a form row of unequal controls.
+     align-items: start is the entire point: a 32px input beside a 90px
+     textarea shares a top edge instead of stretching to match it. */
+  .m-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(var(--m-field-min), 1fr));
+    gap: var(--m-gap);
+    align-items: start;
+  }
+
+  /* measure — a reading column: capped at --m-measure and centred in its
+     parent. This was called .m-center, which was the most tempting name in
+     the system and did not do what it said: it sets no display, no
+     align-items and no justify-content, so content handed to it sat at the
+     top of the box while the author waited for it to be centred. It is named
+     for the token it reads now, and the thing people were reaching for has
+     its own class below. */
+  .m-measure {
+    margin-inline: auto;
+    max-width: var(--m-measure);
+  }
+
+  /* middle — one thing in the middle of its box, both axes. The case every
+     empty state, loader and placeholder needs and the system had no answer
+     for. Grid rather than flex so it centres a lone child without that child
+     having to be told anything, and so it does not fight a flex-direction
+     some ancestor already set. */
+  .m-middle {
+    display: grid;
+    place-items: center;
+    place-content: center;
+  }
+
+  /* cross axis — how children of unequal size line up.
+     `start` and `end` are the box-alignment spellings and mean the same thing
+     in flex and grid, so one class works in either container. */
+  .m-items-start {
+    align-items: start;
+  }
+  .m-items-center {
+    align-items: center;
+  }
+  .m-items-end {
+    align-items: end;
+  }
+  .m-items-baseline {
+    align-items: baseline;
+  }
+  .m-items-stretch {
+    align-items: stretch;
+  }
+
+  /* the rows themselves, when the container is taller than its content.
+     This is the one that stops a grid quietly absorbing slack into its gaps. */
+  .m-content-start {
+    align-content: start;
+  }
+  .m-content-center {
+    align-content: center;
+  }
+  .m-content-between {
+    align-content: space-between;
+  }
+
+  /* one child opting out of what the container decided */
+  .m-self-start {
+    align-self: start;
+  }
+  .m-self-center {
+    align-self: center;
+  }
+  .m-self-end {
+    align-self: end;
+  }
+  .m-self-stretch {
+    align-self: stretch;
+  }
+
+  /* everything after this goes to the far end */
+  .m-push {
+    margin-inline-start: auto;
+  }
+}
+
+
+/* ===== grid — the app chassis — rail · list · pane — and the tile grid ===== */
+
+/* layout — the app shell and the tile grid.
+
+   Every m app is the same shape: a rail, an optional list, and the pane where
+   the work happens, with a bar above and a statusbar below. Owning that here
+   is what R7 means in practice — a new m app is in the chassis on day one
+   because the chassis is a class, not a copied file.
+
+   Columns come from the fix scale so the rail of one app is the rail of the
+   next. Override per app by setting the variable, not by re-authoring:
+       .app { --m-rail-w: var(--m-fix-2); } */
+
+@layer components {
+  .m-app {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+    /* biome-ignore lint/suspicious/noDuplicateProperties: progressive enhancement — 100dvh follows mobile chrome, 100vh is the floor beneath it */
+    height: 100dvh;
+    background: var(--m-bg);
+    color: var(--m-ink);
+    overflow: hidden;
+  }
+
+  /* two panes: rail · pane */
+  .m-shell {
+    display: grid;
+    grid-template-columns: var(--m-rail-w) 1fr;
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* three panes: rail · list · pane */
+  .m-shell-3 {
+    grid-template-columns: var(--m-rail-w) var(--m-list-w) 1fr;
+  }
+  /* one pane: the rail is put away. Every m app can hide its rail — mpad on
+     ⌘B, mmail on ⌘\ — and the shape it collapses to belongs to the chassis
+     rather than to whichever app needed it first. The rail is unmounted, not
+     merely narrowed: a 0px column still lets a focused control inside it be
+     tabbed to, which is a focus that goes nowhere visible. */
+  .m-shell-1 {
+    grid-template-columns: 1fr;
+  }
+
+  /* every shell child is its own scroll context, never the page's */
+  .m-shell > * {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .m-pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .m-pane-hair {
+    border-left: 1px solid var(--m-hair);
+  }
+
+  /* tiles — the card grid (spec cards, pad grids, settings groups) */
+  .m-tiles {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(var(--m-tile-min), 1fr));
+  }
+  .m-tiles-sm {
+    --m-tile-min: 200px;
+  }
+  .m-tiles-lg {
+    --m-tile-min: 380px;
+  }
+
+  /* below the list breakpoint the middle column folds away; the app decides
+     which pane is showing by toggling .m-shell-3 off */
+  @media (max-width: 880px) {
+    .m-shell {
+      grid-template-columns: 1fr;
+    }
+    .m-shell-3 {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+
+/* ===== scroll — the m scrollbar, scrolled-edge hairlines, the virtual-list contract ===== */
+
+/* scroll surfaces — the m scrollbar, and the edges that say there is more.
+
+   The bar is a thumb with no track: a hairline-weight tint that darkens on
+   hover, sized in both engines (scrollbar-color for Gecko, ::-webkit-* for
+   Blink/WebKit). scrollbar-gutter: stable keeps the content from shifting
+   when the bar appears, which matters most in a list that is still loading.
+
+   A .m-scroll pane must be focusable and named:
+
+       <div class="m-scroll" tabindex="0" role="region" aria-label="threads">
+
+   A region that scrolls but cannot be focused cannot be scrolled from the
+   keyboard at all (WCAG 2.1.1) — axe reports it as scrollable-region-focusable.
+   @mdesign/react's <ScrollArea> and <VirtualList> do both for you.
+
+   Edges: a pane that is scrolled away from its start shows a hairline at that
+   edge and nothing else. It is drawn with an inset box-shadow so it costs no
+   layout — an inset hairline, not a cast shadow; the overlay still owns the
+   only shadow in the system (R4). @mdesign/react's <ScrollArea> sets the
+   data-at-start / data-at-end attributes; hand-written panes may set them
+   themselves or leave the edges off. */
+
+@layer components {
+  .m-scroll {
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--m-scroll-thumb) transparent;
+  }
+  .m-scroll-y {
+    overflow-x: hidden;
+  }
+  .m-scroll-x {
+    overflow-y: hidden;
+  }
+
+  .m-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .m-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .m-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  .m-scroll::-webkit-scrollbar-thumb {
+    background: var(--m-scroll-thumb);
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: 5px;
+  }
+  .m-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--m-scroll-thumb-hover);
+    background-clip: content-box;
+  }
+
+  .m-scroll[data-at-start="false"] {
+    box-shadow: inset 0 1px 0 var(--m-hair);
+  }
+  .m-scroll[data-at-end="false"] {
+    box-shadow: inset 0 -1px 0 var(--m-hair);
+  }
+  .m-scroll[data-at-start="false"][data-at-end="false"] {
+    box-shadow:
+      inset 0 1px 0 var(--m-hair),
+      inset 0 -1px 0 var(--m-hair);
+  }
+
+  /* a pane that scrolls to items — the row lands under the sticky head */
+  .m-scroll-snap {
+    scroll-snap-type: y proximity;
+    scroll-padding-top: 36px;
+  }
+  .m-scroll-snap > * {
+    scroll-snap-align: start;
+  }
+
+  /* virtual lists: the viewport scrolls, the spacer holds the full height,
+     and only the windowed rows exist. Rows are positioned, so the row class
+     must not set position itself. */
+  .m-vlist {
+    position: relative;
+  }
+  .m-vlist-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+  }
+}
+
+
+/* ===== type — the voices — caption to display, prose for reading — and the in-text link ===== */
+
+/* type voices — roles, not sizes. Sans carries language; mono carries
+   machine facts (meta, labels, paths, counts, keys). */
+
+@layer components {
+  .m-body {
+    font: 400 14px / 1.6 var(--m-font-sans);
+    color: var(--m-ink);
+  }
+
+  /* prose — the reading voice, for a rendered document rather than for the
+     interface around it. .m-body is UI text: it is sized to sit in a row
+     beside a control. A page of markdown read at that size and leading looks
+     like chrome someone forgot to lay out, which is what sent both apps off
+     to invent their own — mpad's preview was 14px/1.7 written by hand.
+     One step larger and a line and a half of leading is the difference
+     between a panel and a page. */
+  .m-prose {
+    font: 400 16px / 1.75 var(--m-font-sans);
+    color: var(--m-ink);
+    max-width: var(--m-measure);
+  }
+  .m-ui {
+    font: 400 13px / 1.5 var(--m-font-sans);
+    color: var(--m-ink);
+  }
+  .m-meta {
+    font: 400 11px / 1 var(--m-font-mono);
+    color: var(--m-fog);
+  }
+  .m-caption {
+    font: 400 10.5px / 1.5 var(--m-font-mono);
+    color: var(--m-mist);
+  }
+  .m-title {
+    font: 400 21px / 1.45 var(--m-font-sans);
+    color: var(--m-ink);
+  }
+  .m-display {
+    font: 600 34px / 1.25 var(--m-font-sans);
+    letter-spacing: -0.01em;
+    color: var(--m-ink);
+  }
+  .m-section {
+    font: 600 13px / 1 var(--m-font-sans);
+    color: var(--m-ink);
+  }
+
+  /* A link inside a block of text cannot be marked by colour alone (WCAG
+     1.4.1) — and there is no second accent to mark it with anyway (R1). So it
+     inherits its colour and carries a mist underline, which thickens to the
+     text's own colour on hover. Standalone links — nav, cards, rows — are not
+     in a text block and do not need this. */
+  /* Works on <a> and on <button> alike: a crumb or a breadcrumb step that
+     navigates in-app is a button, and a button arrives carrying the browser's
+     own face, background and border — all of which have to go before the token
+     colours can be seen at all. */
+  .m-link {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--m-mist);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+  .m-link:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+
+/* ===== icon — 20-grid monoline glyph slot, one sprite ===== */
+
+/* icons — 20-grid monoline, stroke 1.6, butt caps like the marks,
+   currentColor. One sprite: marks/icons.svg.
+
+       <svg class="m-icon" aria-hidden="true"><use href="…/icons.svg#i-search"/></svg>
+
+   Decorative by default: an icon inside a labelled control is aria-hidden.
+   A meaningful icon takes role="img" and a <title>. */
+
+@layer components {
+  .m-icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: butt;
+    stroke-linejoin: miter;
+  }
+  .m-icon-20 {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+
+/* ===== button — default, solid, line, quiet; three sizes; square icon buttons ===== */
+
+/* buttons — no gold: accent means alive, not clickable (R1).
+
+   Four weights: default (tint), solid (the one loud button), line, quiet.
+   Three sizes on the 4px grid. Icon-only buttons are square and must carry
+   a name — aria-label or .m-sr-only text; .m-tooltip is decoration only. */
+
+@layer components {
+  .m-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: var(--m-control-md);
+    padding: 0 14px;
+    border: 0;
+    border-radius: 4px;
+    background: var(--m-tint);
+    color: var(--m-ink);
+    font: 500 13px / 1 var(--m-font-sans);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .m-btn:hover {
+    background: var(--m-tint-2);
+  }
+  .m-btn:disabled,
+  .m-btn[aria-disabled="true"] {
+    background: var(--m-tint);
+    color: var(--m-mist);
+    cursor: default;
+  }
+
+  .m-btn-quiet {
+    background: transparent;
+    color: var(--m-fog);
+  }
+  .m-btn-quiet:hover {
+    background: var(--m-tint);
+    color: var(--m-ink);
+  }
+  .m-btn-quiet:disabled,
+  .m-btn-quiet[aria-disabled="true"] {
+    background: transparent;
+    color: var(--m-mist);
+  }
+
+  .m-btn-solid {
+    background: var(--m-solid);
+    color: var(--m-on-solid);
+  }
+  .m-btn-solid:hover {
+    background: var(--m-fog);
+    color: var(--m-on-solid);
+  }
+  .m-btn-solid:disabled,
+  .m-btn-solid[aria-disabled="true"] {
+    background: var(--m-tint-2);
+    color: var(--m-mist);
+  }
+
+  .m-btn-line {
+    background: transparent;
+    border: 1px solid var(--m-hair-strong);
+    color: var(--m-ink);
+  }
+  .m-btn-line:hover {
+    background: var(--m-tint);
+  }
+  .m-btn-line:disabled,
+  .m-btn-line[aria-disabled="true"] {
+    border-color: var(--m-hair);
+    color: var(--m-mist);
+    background: transparent;
+  }
+
+  .m-btn-sm {
+    height: var(--m-control-sm);
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .m-btn-lg {
+    height: var(--m-control-lg);
+    padding: 0 18px;
+    font-size: 13.5px;
+  }
+
+  /* icon-only buttons are square; .m-icon is the monoline glyph slot */
+  .m-btn-icon {
+    width: var(--m-control-md);
+    padding: 0;
+  }
+  .m-btn-icon.m-btn-sm {
+    width: var(--m-control-sm);
+  }
+  .m-btn-icon.m-btn-lg {
+    width: var(--m-control-lg);
+  }
+
+  /* a button mid-work: the label holds its place so nothing reflows */
+  .m-btn-busy {
+    cursor: progress;
+  }
+  .m-btn-busy .m-spinner {
+    border-top-color: currentColor;
+  }
+
+  /* forced-colors flattens our alpha fills — give the OS a border to paint */
+  @media (forced-colors: active) {
+    .m-btn {
+      border: 1px solid ButtonBorder;
+    }
+  }
+}
+
+
+/* ===== input — text, select, textarea, checkbox, switch, field, label, hint ===== */
+
+/* inputs — hairline border, quiet fog focus, no outline.
+
+   Focus replaces the global outline with an inset ring so the control keeps
+   its exact box: border to fog plus a 1px shadow of the same fog reads as a
+   2px edge, which clears WCAG 2.4.11 without borrowing gold. */
+
+@layer components {
+  .m-input,
+  .m-select,
+  .m-textarea {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--m-hair-strong);
+    border-radius: 4px;
+    color: var(--m-ink);
+    font: 400 13px / 1.5 var(--m-font-sans);
+  }
+  .m-input,
+  .m-select {
+    height: var(--m-control-md);
+    padding: 0 10px;
+  }
+
+  /* grows with content, never a drag handle */
+  .m-textarea {
+    min-height: var(--m-textarea-min);
+    max-height: 240px;
+    padding: 8px 10px;
+    resize: none;
+    field-sizing: content;
+  }
+  /* Safari and Firefox have no field-sizing: the box can't grow itself, so it
+     scrolls instead of clipping. @mdesign/react's <Textarea>/<Composer> drive
+     the same growth from JS wherever this branch is taken. */
+  @supports not (field-sizing: content) {
+    .m-textarea {
+      overflow-y: auto;
+    }
+  }
+
+  .m-input::placeholder,
+  .m-textarea::placeholder {
+    color: var(--m-mist);
+  }
+
+  .m-input:focus-visible,
+  .m-select:focus-visible,
+  .m-textarea:focus-visible {
+    outline: none;
+    border-color: var(--m-fog);
+    box-shadow: 0 0 0 1px var(--m-fog);
+  }
+
+  .m-input:disabled,
+  .m-select:disabled,
+  .m-textarea:disabled {
+    color: var(--m-mist);
+    border-color: var(--m-hair);
+    cursor: default;
+  }
+
+  /* invalid is stated, not colored — no second accent exists (R1). The edge
+     strengthens to ink and .m-hint[role=alert] carries the words. */
+  .m-input[aria-invalid="true"],
+  .m-select[aria-invalid="true"],
+  .m-textarea[aria-invalid="true"] {
+    border-color: var(--m-ink);
+  }
+
+  .m-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b8b94' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 10px 6px;
+  }
+  /* the native menu is the OS's, so it needs the OS's own colors */
+  .m-select option {
+    background: var(--m-overlay-bg);
+    color: var(--m-ink);
+  }
+
+  .m-check {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--m-gold);
+  }
+
+  /* the switch: an <input type="checkbox" role="switch"> or a
+     <button role="switch" aria-checked>. Both are styled here. */
+  .m-switch {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 30px;
+    height: var(--m-bit);
+    padding: 0;
+    border-radius: 9px;
+    background: var(--m-tint-2);
+    border: 1px solid var(--m-hair-strong);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .m-switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--m-fog);
+    transition:
+      left 0.15s ease,
+      background 0.15s ease;
+  }
+  .m-switch:checked,
+  .m-switch[aria-checked="true"] {
+    background: var(--m-gold);
+    border-color: transparent;
+  }
+  .m-switch:checked::after,
+  .m-switch[aria-checked="true"]::after {
+    left: 14px;
+    background: var(--m-on-gold);
+  }
+  .m-switch:disabled,
+  .m-switch[aria-disabled="true"] {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .m-switch,
+    .m-switch::after {
+      transition: none;
+    }
+  }
+
+  /* forced-colors drops background-color: state has to come from a border */
+  @media (forced-colors: active) {
+    .m-switch {
+      border-color: ButtonBorder;
+    }
+    .m-switch:checked,
+    .m-switch[aria-checked="true"] {
+      border-color: Highlight;
+    }
+    .m-switch::after {
+      background: ButtonText;
+    }
+  }
+
+  /* align-content: start is load-bearing. A field is a grid, and a grid given
+     more height than its rows need distributes the slack INTO the rows — so a
+     field sitting beside a taller sibling grew its 11px label to 41px and
+     pushed its control down the page. Its rows hug, whatever height it is
+     handed; .m-fields is the container that hands out that height. */
+  .m-field {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+  }
+  .m-label {
+    font: 500 11px / 1 var(--m-font-mono);
+    color: var(--m-fog);
+  }
+  .m-hint {
+    font: 400 11.5px / 1.5 var(--m-font-sans);
+    color: var(--m-mist);
+  }
+  .m-hint[role="alert"] {
+    color: var(--m-ink);
+  }
+}
+
+
+/* ===== composer — the message input — filled shell, auto-grow, no handle ===== */
+
+/* the composer — a message input: filled shell, auto-grow, no drag handle.
+   The shell owns the focus ring so the caret sits on an unbroken surface. */
+
+@layer components {
+  .m-composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 10px 10px 10px 14px;
+    background: var(--m-panel);
+    border: 1px solid var(--m-hair-strong);
+    border-radius: 6px;
+  }
+  .m-composer:focus-within {
+    border-color: var(--m-fog);
+    box-shadow: 0 0 0 1px var(--m-fog);
+  }
+
+  .m-composer-input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--m-ink);
+    font: 400 13.5px / 1.55 var(--m-font-sans);
+    resize: none;
+    field-sizing: content;
+    min-height: var(--m-bit-lg);
+    max-height: 180px;
+    padding: 4px 0;
+  }
+  @supports not (field-sizing: content) {
+    .m-composer-input {
+      overflow-y: auto;
+    }
+  }
+
+  .m-composer-input::placeholder {
+    color: var(--m-mist);
+  }
+  .m-composer-input:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+}
+
+
+/* ===== bits — pill, chip, badge, avatar, kbd, the live dot, the wordmark ===== */
+
+/* the small pieces — pill, chip, badge, avatar, kbd, the live dot, wordmark */
+
+@layer components {
+  .m-pill {
+    display: inline-flex;
+    align-items: center;
+    height: var(--m-bit);
+    padding: 0 8px;
+    border-radius: 9px;
+    background: var(--m-tint-2);
+    color: var(--m-fog);
+    font: 500 10.5px / 1 var(--m-font-mono);
+  }
+
+  .m-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: var(--m-bit-lg);
+    padding: 0 8px;
+    border-radius: 4px;
+    background: var(--m-tint);
+    color: var(--m-fog);
+    font: 500 11.5px / 1 var(--m-font-sans);
+  }
+  .m-chip-x {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--m-mist);
+    font: 400 12px / 1 var(--m-font-sans);
+    cursor: pointer;
+  }
+  .m-chip-x:hover {
+    color: var(--m-ink);
+  }
+
+  .m-badge {
+    display: inline-flex;
+    align-items: center;
+    height: var(--m-bit-sm);
+    padding: 0 6px;
+    border: 1px solid var(--m-hair-strong);
+    border-radius: 2px;
+    font: 500 9.5px / 1 var(--m-font-mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--m-mist);
+  }
+
+  .m-avatar {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 24px;
+    height: var(--m-bit-lg);
+    border-radius: 50%;
+    background: var(--m-tint-2);
+    color: var(--m-fog);
+    font: 600 10px / 1 var(--m-font-sans);
+    text-transform: uppercase;
+  }
+  .m-avatar-lg {
+    width: var(--m-control-md);
+    height: var(--m-control-md);
+    font-size: 12px;
+  }
+  .m-avatar-dot {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-gold);
+    border: 2px solid var(--m-bg);
+  }
+
+  .m-kbd {
+    padding: 2px 4px;
+    border: 1px solid var(--m-hair-strong);
+    border-radius: 2px;
+    font: 400 10.5px / 1 var(--m-font-mono);
+    color: var(--m-fog);
+  }
+
+  /* one of the two movements (R6) — something is alive here */
+  .m-live {
+    display: inline-block;
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--m-gold);
+    animation: m-breath var(--m-breath) ease-in-out infinite;
+  }
+  @keyframes m-breath {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .m-live {
+      animation: none;
+    }
+  }
+
+  /* typed [m] + noun — the chrome wordmark (R2). Round marks never appear
+     here; they belong to icons, favicons, dock and og artwork. */
+  .m-wordmark {
+    font: 400 13px / 1 var(--m-font-mono);
+    color: var(--m-fog);
+  }
+  .m-wordmark .br {
+    color: var(--m-mist);
+  }
+  .m-wordmark .m {
+    color: var(--m-ink);
+    font-weight: 700;
+  }
+}
+
+
+/* ===== identity — the eight-step scale (R8) — the label dot, the peer flag, the syntax token ===== */
+
+/* identity — the eight-step scale, and the three things that carry it.
+   R8: the scale says WHICH, never how alive and never how much.
+
+   Gold answers "is this alive?". The identity scale answers "which one is
+   this?" — which label, which peer, which kind of token. They never overlap:
+   an unread dot is gold whatever label it carries, and a label dot is its own
+   hue whether or not the row is selected.
+
+   Every rule here reads var(--m-id) rather than a numbered token, so one
+   .m-id-* class on an ancestor colours the dot, the flag and the token
+   together, and the parts below never learn how many steps there are.
+
+   Forbidden by tests/law.test.ts: reading --m-id under :hover, :focus,
+   [aria-selected] or [aria-current]. Identity is not a state. */
+
+@layer components {
+  .m-id-1 {
+    --m-id: var(--m-id-1);
+  }
+  .m-id-2 {
+    --m-id: var(--m-id-2);
+  }
+  .m-id-3 {
+    --m-id: var(--m-id-3);
+  }
+  .m-id-4 {
+    --m-id: var(--m-id-4);
+  }
+  .m-id-5 {
+    --m-id: var(--m-id-5);
+  }
+  .m-id-6 {
+    --m-id: var(--m-id-6);
+  }
+  .m-id-7 {
+    --m-id: var(--m-id-7);
+  }
+  .m-id-8 {
+    --m-id: var(--m-id-8);
+  }
+
+  /* the dot — a label's mark in a row or a rail. A graphic, so it clears the
+     3:1 non-text floor; the label's words sit beside it in ink, because a
+     colour alone has never been allowed to carry the meaning (WCAG 1.4.1). */
+  .m-dot {
+    display: inline-block;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-id);
+  }
+
+  /* the flag — a peer's name on their own colour: the cursor label in a
+     shared document, the presence chip in a bar. */
+  .m-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: var(--m-bit);
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--m-id);
+    color: var(--m-on-id);
+    font: 500 10.5px / 1 var(--m-font-mono);
+    white-space: nowrap;
+  }
+
+  /* the token — identity as text. Syntax highlighting is the case that set
+     the contrast floor for the whole scale: these are words, read at 11px,
+     so the scale clears AA as text rather than the graphic 3:1. */
+  .m-token {
+    color: var(--m-id);
+  }
+
+  /* the caret and its selection band — a peer editing in a shared document.
+     The band is the peer's hue at low alpha over whatever surface it lands
+     on, so text stays readable through it. */
+  .m-caret {
+    position: relative;
+    border-left: 2px solid var(--m-id);
+    margin-left: -1px;
+  }
+  .m-band {
+    background: color-mix(in srgb, var(--m-id) 18%, transparent);
+  }
+
+  /* forced-colors throws every custom hue away, so identity has to be said a
+     second way or the scale silently collapses into one colour */
+  @media (forced-colors: active) {
+    .m-dot,
+    .m-flag {
+      forced-color-adjust: none;
+    }
+  }
+}
+
+
+/* ===== splitter — two panes and a divider you can drag or move by keyboard ===== */
+
+/* splitter — two panes and a divider you can drag.
+
+   The chassis columns are fixed by design: a rail is a rail, and an app that
+   wants a wider one sets --m-rail-w. But a list beside a document is the one
+   split a person genuinely re-balances, and both m apps had grown their own —
+   mpad wrapping a vendor package, mmail wrapping the same one again with its
+   own class names and its own idea of the handle. Neither agreed with the
+   other and neither was the language's.
+
+   The divider IS a hairline (R4) — the wider strip around it is a grab
+   target, not a second line. Focus is fog, never gold: a divider you have
+   tabbed to is not alive, it is selected (R1). */
+
+@layer components {
+  .m-splitter {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .m-splitter > * {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .m-splitter-bar {
+    position: relative;
+    border: 0;
+    padding: 0;
+    background: var(--m-hair);
+    touch-action: none;
+  }
+
+  /* the grab target is wider than the line it draws, and lives outside the
+     layout so widening it never moves either pane */
+  .m-splitter-bar::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 50%;
+    width: 10px;
+    transform: translateX(-50%);
+  }
+
+  .m-splitter[data-axis="columns"] > .m-splitter-bar {
+    cursor: col-resize;
+  }
+
+  .m-splitter[data-axis="rows"] > .m-splitter-bar {
+    cursor: row-resize;
+  }
+
+  .m-splitter[data-axis="rows"] > .m-splitter-bar::after {
+    inset-block: auto;
+    inset-inline: 0;
+    left: 0;
+    top: 50%;
+    width: auto;
+    height: 10px;
+    transform: translateY(-50%);
+  }
+
+  .m-splitter-bar:hover,
+  .m-splitter-bar[data-dragging="true"] {
+    background: var(--m-hair-strong);
+  }
+
+  .m-splitter-bar:focus-visible {
+    outline: none;
+    background: var(--m-fog);
+  }
+
+  @media (forced-colors: active) {
+    .m-splitter-bar {
+      background: ButtonBorder;
+    }
+    .m-splitter-bar:focus-visible {
+      background: Highlight;
+    }
+  }
+}
+
+
+/* ===== tooltip — the decorative CSS form and the real role="tooltip" element ===== */
+
+/* tooltip — two forms, and the difference matters.
+
+   .m-tooltip[data-tip]  CSS-only, drawn with ::after. Generated content is
+                         not reliably exposed to assistive tech, so it is
+                         DECORATION: the control must still carry its own
+                         name (aria-label or .m-sr-only text).
+   .m-tooltip-el         a real element with role="tooltip", referenced by
+                         aria-describedby. @mdesign/react's <Tooltip> renders
+                         this one and positions it. */
+
+@layer components {
+  .m-tooltip {
+    position: relative;
+  }
+  .m-tooltip[data-tip]:hover::after,
+  .m-tooltip[data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 8px;
+    background: var(--m-overlay-bg);
+    border: 1px solid var(--m-hair);
+    border-radius: 4px;
+    color: var(--m-fog);
+    font: 400 11px / 1 var(--m-font-mono);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  .m-tooltip-el {
+    position: fixed;
+    z-index: 200;
+    padding: 6px 8px;
+    background: var(--m-overlay-bg);
+    border: 1px solid var(--m-hair);
+    border-radius: 4px;
+    color: var(--m-fog);
+    font: 400 11px / 1 var(--m-font-mono);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+}
+
+
+/* ===== segmented — a small exclusive choice — selection is the raised surface ===== */
+
+/* segmented — a small exclusive choice.
+
+   THE SELECTION RULE. The system marks "this one" two different ways, and
+   which one you want depends on what kind of thing is selected:
+
+   · a gold edge marks WHERE YOU ARE — the open tab, the selected row, the
+     current rail item. A place you navigated into, one of an open-ended set.
+   · a raised surface marks WHAT YOU CHOSE — the current value of an enclosed
+     control. A value, not a place, and nothing about it is alive.
+
+   A setting's value is never gold. Writing the distinction down here because
+   it was previously only implied by which file a rule happened to live in,
+   and the first app to reach for it guessed wrong.
+
+   Selection is a surface, and a surface has to read against whatever is under
+   it. --m-bg alone does not: a segmented control sitting ON --m-bg gives a
+   track of bg+tint and a chosen segment of bg, so the selected one comes out
+   DARKER than the track and the control reads inside out. The 1px hairline
+   ring is what makes the raised surface survive being placed anywhere — on
+   bg, on panel, on well, or inside a card.
+
+   Markup is a radiogroup (aria-checked) or a pressed toolbar (aria-pressed);
+   both are honoured. */
+
+@layer components {
+  .m-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 4px;
+    background: var(--m-tint);
+  }
+  .m-seg-btn {
+    height: var(--m-control-sm);
+    padding: 0 10px;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--m-fog);
+    font: 500 12px / 1 var(--m-font-sans);
+    cursor: pointer;
+  }
+  /* an icon-only segment is square, like an icon button */
+  .m-seg-btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--m-control-sm);
+    padding: 0;
+  }
+  .m-seg-btn:hover {
+    color: var(--m-ink);
+  }
+  .m-seg-btn[aria-pressed="true"],
+  .m-seg-btn[aria-checked="true"] {
+    background: var(--m-bg);
+    color: var(--m-ink);
+    box-shadow: 0 0 0 1px var(--m-hair-strong);
+  }
+
+  @media (forced-colors: active) {
+    .m-seg-btn[aria-pressed="true"],
+    .m-seg-btn[aria-checked="true"] {
+      border: 1px solid Highlight;
+    }
+  }
+}
+
+
+/* ===== feedback — notice, toast, skeleton, spinner, progress ===== */
+
+/* feedback — notice, toast, skeleton, spinner, progress.
+
+   Loading never shimmers (R6). The only things that move are alive: the
+   spinner's turn and the loader's sweep. Both stop under reduced-motion. */
+
+@layer components {
+  .m-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--m-panel);
+    border: 1px solid var(--m-hair-strong);
+    border-radius: 4px;
+    color: var(--m-fog);
+    font: 400 12.5px / 1.5 var(--m-font-sans);
+  }
+
+  /* toasts — a notice on the overlay surface, stacked. The region is an
+     aria-live landmark; it appears without motion, like every overlay. */
+  .m-toaster {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: var(--m-fix-4);
+    max-width: calc(100vw - 32px);
+    pointer-events: none;
+  }
+  .m-toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    background: var(--m-overlay-bg);
+    border: 1px solid var(--m-hair);
+    border-radius: 6px;
+    box-shadow: var(--m-overlay-shadow);
+    color: var(--m-ink);
+    font: 400 12.5px / 1.5 var(--m-font-sans);
+    pointer-events: auto;
+  }
+  .m-toast-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .m-toast-title {
+    font-weight: 500;
+  }
+  .m-toast-text {
+    margin-top: 2px;
+    color: var(--m-fog);
+  }
+
+  /* static — loading surfaces never shimmer. Mark them aria-hidden and put
+     the real state in an aria-live region. */
+  .m-skeleton {
+    background: var(--m-tint-2);
+    border-radius: 4px;
+    min-height: 12px;
+  }
+
+  .m-spinner {
+    width: var(--m-bit-sm);
+    height: var(--m-bit-sm);
+    flex: none;
+    border-radius: 50%;
+    border: 2px solid var(--m-tint-2);
+    border-top-color: var(--m-gold);
+    animation: m-turn var(--m-turn) linear infinite;
+  }
+  .m-spinner-lg {
+    width: var(--m-bit-lg);
+    height: var(--m-bit-lg);
+  }
+  @keyframes m-turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .m-progress {
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--m-tint-2);
+    overflow: hidden;
+  }
+  .m-progress-fill {
+    height: 100%;
+    width: var(--progress, 0%);
+    background: var(--m-gold);
+  }
+  .m-progress-indet .m-progress-fill {
+    width: 30%;
+    animation: m-sweep 1.2s ease-in-out infinite;
+  }
+  @keyframes m-sweep {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(433%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .m-spinner,
+    .m-progress-indet .m-progress-fill {
+      animation: none;
+    }
+    /* an indeterminate bar that cannot sweep still has to read as busy */
+    .m-progress-indet .m-progress-fill {
+      width: 100%;
+      opacity: 0.5;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .m-progress {
+      border: 1px solid ButtonBorder;
+    }
+    .m-progress-fill {
+      background: Highlight;
+    }
+    .m-spinner {
+      border-color: ButtonBorder;
+      border-top-color: Highlight;
+    }
+  }
+}
+
+
+/* ===== list — row, table, search, rail, path ===== */
+
+/* rows, tables, search, the rail, the path — the reading surfaces.
+
+   Selection is a tint plus a 2px gold edge: the open item is the one alive
+   thing in a list (R1). Hover is a tint of the same surface, never a new
+   color (R3). */
+
+@layer components {
+  .m-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: var(--m-row-h);
+    padding: 0 14px;
+  }
+  .m-row:hover {
+    background: var(--m-tint);
+  }
+  .m-row-selected,
+  .m-row[aria-selected="true"],
+  /* a windowed list carries aria-selected on the row wrapper it owns, so the
+     row inside it has to inherit the treatment or selection goes invisible */
+  .m-vlist-row[aria-selected="true"] > .m-row {
+    background: var(--m-tint);
+    box-shadow: inset 2px 0 0 var(--m-gold);
+  }
+
+  .m-table-wrap {
+    overflow-x: auto;
+  }
+  .m-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .m-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font: 500 11px / 1 var(--m-font-mono);
+    color: var(--m-fog);
+    border-bottom: 1px solid var(--m-hair-strong);
+  }
+  .m-table td {
+    padding: 8px 12px;
+    font: 400 13px / 1.5 var(--m-font-sans);
+    color: var(--m-ink);
+    border-bottom: 1px solid var(--m-hair);
+  }
+  .m-table tr:hover td {
+    background: var(--m-tint);
+  }
+
+  /* search — an input with its glyph */
+  .m-search {
+    position: relative;
+  }
+  .m-search .m-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--m-mist);
+    pointer-events: none;
+  }
+  .m-search .m-input {
+    padding-left: 34px;
+  }
+
+  /* rail — the sidebar nav (folders, pads) */
+  .m-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px;
+  }
+  .m-rail-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: var(--m-row-h);
+    padding: 0 8px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--m-fog);
+    font: 400 13px / 1 var(--m-font-sans);
+    cursor: pointer;
+    text-align: left;
+  }
+  .m-rail-row:hover {
+    background: var(--m-tint);
+    color: var(--m-ink);
+  }
+  .m-rail-row[aria-current="true"],
+  .m-rail-row[aria-current="page"] {
+    background: var(--m-tint);
+    color: var(--m-ink);
+    box-shadow: inset 2px 0 0 var(--m-gold);
+  }
+  .m-rail-row .m-pill {
+    margin-left: auto;
+  }
+
+  /* path — where a pad lives */
+  .m-path {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    font: 400 12.5px / 1 var(--m-font-mono);
+    color: var(--m-fog);
+    white-space: nowrap;
+  }
+  .m-path .sep {
+    color: var(--m-mist);
+  }
+  .m-path .cur {
+    color: var(--m-ink);
+  }
+
+  @media (forced-colors: active) {
+    .m-row-selected,
+    .m-row[aria-selected="true"],
+    .m-rail-row[aria-current="true"],
+    .m-rail-row[aria-current="page"] {
+      outline: 1px solid Highlight;
+      outline-offset: -1px;
+    }
+  }
+}
+
+
+/* ===== chrome — the bar, the statusbar, tabs ===== */
+
+/* chrome — the bar, the statusbar, tabs. Machine facts, so mono.
+
+   The hairlines here are inset shadows, not borders. A border lives inside
+   the box under border-box sizing, so a 36px bar with a 1px bottom border
+   has 35px of content area: everything centred in it sits half a pixel above
+   the box's own middle, and the statusbar does the same in reverse. Half a
+   pixel is not much until a bar of 11px mono text is the thing sitting on it.
+   A shadow draws the same hairline without taking the pixel, so the band is
+   its stated height and its content is centred in the whole of it. */
+
+@layer components {
+  .m-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: var(--m-bar-h);
+    padding: 0 14px;
+    background: var(--m-bg);
+    box-shadow: inset 0 -1px 0 var(--m-hair);
+    font: 400 11px / 1 var(--m-font-mono);
+    color: var(--m-fog);
+  }
+
+  /* One band, spanning the app, with two ends — leading for where you are,
+     trailing for what you are looking at. It belongs to the chassis and never
+     to a column: two columns each growing a footer of their own is two bands
+     at two heights, ending wherever their columns happen to end. <Statusbar>
+     is the shape; .m-push is what sends the trailing group to the far edge.
+
+     AND IT IS THE ONLY PLACE STATUS LIVES. Not a chip floating in .m-bar, not
+     a footer at the bottom of a pane — if it says whether something is
+     working, syncing, connected or stale, it belongs in this band. mmail had
+     the same question answerable in three different places depending on how
+     it had failed: a sync line under the thread list, a read-only note under
+     the reading pane, and a credential-health capsule up in the drag band.
+     A chip in the bar also has to invent a fill and an edge to read as
+     anything; down here it inherits a voice and needs neither. */
+  /* The band owns its surface, exactly as .m-bar above does. It used not to,
+     and the two chrome bands differing was invisible for as long as every
+     consumer happened to put them on an opaque .m-app: mmail's root is
+     transparent for window vibrancy, so its statusbar inherited the window
+     material and came out DARK across a light app. A band that only looks
+     right on a surface it does not name is a band that will be wrong. */
+  .m-statusbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: var(--m-statusbar-h);
+    padding: 0 10px;
+    background: var(--m-bg);
+    box-shadow: inset 0 1px 0 var(--m-hair);
+    font: 400 10.5px / 1 var(--m-font-mono);
+    color: var(--m-mist);
+  }
+
+  .m-tabs {
+    display: flex;
+    gap: 4px;
+    box-shadow: inset 0 -1px 0 var(--m-hair);
+  }
+  .m-tab {
+    height: var(--m-control-md);
+    padding: 0 12px;
+    border: 0;
+    background: transparent;
+    color: var(--m-fog);
+    font: 500 12.5px / 1 var(--m-font-sans);
+    cursor: pointer;
+  }
+  .m-tab:hover {
+    color: var(--m-ink);
+    background: var(--m-tint);
+  }
+  .m-tab-active,
+  .m-tab[aria-selected="true"] {
+    color: var(--m-ink);
+    box-shadow: inset 0 -2px 0 var(--m-gold);
+  }
+
+  @media (forced-colors: active) {
+    .m-tab-active,
+    .m-tab[aria-selected="true"] {
+      border-bottom: 2px solid Highlight;
+    }
+  }
+}
+
+
+/* ===== surface — panel, well, card, graphite tiles, the silent patterns ===== */
+
+/* surfaces — the three neutrals, the card, the graphite tiles, and the
+   silent patterns. Texture comes from the language (dots · rules · arches),
+   never from a gradient. */
+
+@layer components {
+  .m-panel {
+    background: var(--m-panel);
+  }
+  .m-well {
+    background: var(--m-well);
+  }
+
+  /* card — head, body, foot on a panel. No shadow: only the overlay casts (R4) */
+  .m-card {
+    background: var(--m-panel);
+    border: 1px solid var(--m-hair);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .m-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--m-hair);
+  }
+  .m-card-body {
+    padding: 18px;
+  }
+  .m-card-foot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--m-hair);
+  }
+
+  /* graphite artifacts — theme-fixed (icons, og cards) */
+  .m-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    background: var(--m-graphite);
+    color: var(--m-graphite-ink);
+  }
+  /* the tile's face is theme-fixed, but the ring separating it from the page
+     is not — so the ring is a token and the rule is one rule */
+  .m-tile {
+    box-shadow: 0 0 0 1px var(--m-tile-ring);
+  }
+  .m-tile-96 {
+    width: 96px;
+    height: 96px;
+    border-radius: 22px;
+  }
+  .m-tile-32 {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+  }
+  .m-tile-16 {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+  }
+
+  /* THE PATTERNS. Texture marks a GROUND — a surface waiting to hold
+     something — and comes off the moment something is on it. A pattern under
+     rows, prose or a reading surface competes with the thing you are meant to
+     be reading, so the rule is: texture behind emptiness, never behind
+     content.
+
+     Which pattern is not a matter of taste. Each names a different kind of
+     ground, and the three do not overlap:
+
+     · dots   — a PLACEMENT ground. Something will be put here, freely and
+                anywhere: a canvas, a board, a page not yet named. Graph paper.
+     · rules  — a WRITING ground. Something will be written here, in lines: an
+                empty editor, an empty thread, a note with nothing in it yet.
+                Ruled paper.
+     · arches — an IDENTITY ground. Marketing and first-run surfaces only —
+                the hero, the og card, the onboarding wizard. Never inside the
+                working app, where it would be decoration and nothing else.
+
+     One ink token drives dots and rules in both themes. Note that all three
+     set background-image: apply them with background-COLOR, never the
+     background shorthand, which resets the image and silently removes the
+     texture. */
+  .m-pattern-dots {
+    background-image: radial-gradient(
+      circle at 1.5px 1.5px,
+      var(--m-pattern-ink) 1.1px,
+      transparent 1.2px
+    );
+    background-size: 24px 24px;
+  }
+  .m-pattern-rules {
+    background-image: linear-gradient(to bottom, transparent 27px, var(--m-pattern-ink) 27px);
+    background-size: 28px 28px;
+  }
+  /* arches need a path, so the two cuts stay explicit */
+  .m-pattern-arches {
+    background-repeat: repeat;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14'%3E%3Cpath d='M0 14a7 7 0 0 1 14 0M14 14a7 7 0 0 1 14 0' fill='none' stroke='rgba(255,255,255,0.04)' stroke-width='1.5'/%3E%3C/svg%3E");
+  }
+  html.theme-light .m-pattern-arches {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14'%3E%3Cpath d='M0 14a7 7 0 0 1 14 0M14 14a7 7 0 0 1 14 0' fill='none' stroke='rgba(0,0,0,0.045)' stroke-width='1.5'/%3E%3C/svg%3E");
+  }
+}
+
+
+/* ===== form — steps that read like a statusbar; the body and foot ===== */
+
+/* forms — one step or many; steps read like a statusbar, not a wizard.
+   The current step is the live one, so it takes the gold dot (R1). */
+
+@layer components {
+  .m-steps {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font: 400 11px / 1 var(--m-font-mono);
+    color: var(--m-mist);
+  }
+  .m-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .m-step-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--m-mist);
+    flex: none;
+  }
+  .m-step[aria-current="step"] {
+    color: var(--m-ink);
+  }
+  .m-step[aria-current="step"] .m-step-dot {
+    background: var(--m-gold);
+  }
+  .m-step-done {
+    color: var(--m-fog);
+  }
+  .m-step-done .m-step-dot {
+    background: var(--m-fog);
+  }
+
+  /* same reason as .m-field: a form body given height must not feed it to the
+     gaps between its fields */
+  .m-form-body {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+  }
+  .m-form-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+}
+
+
+/* ===== overlay — the scrim, the command center, the modal, the dialog ===== */
+
+/* overlays — the command center, the modal, the dialog.
+
+   The overlay owns the system's only shadow (R4) and appears instantly: no
+   entrance motion exists (R6). Every overlay is a focus trap in markup —
+   role="dialog" aria-modal="true" with the page inert behind it. The React
+   components do that for you; hand-written overlays must do it themselves. */
+
+@layer components {
+  .m-overlay {
+    background: var(--m-overlay-bg);
+    border-radius: 6px;
+    box-shadow: var(--m-overlay-shadow);
+    overflow: hidden;
+  }
+
+  .m-scrim {
+    position: fixed;
+    inset: 0;
+    background: var(--m-scrim);
+  }
+
+  /* positions any overlay above the scrim */
+  .m-overlay-pos {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 12vh;
+  }
+  /* display:flex would defeat the hidden attribute — restate it */
+  .m-overlay-pos[hidden] {
+    display: none;
+  }
+  .m-overlay-pos > .m-overlay {
+    position: relative;
+  }
+
+  /* the command center — one palette serves every m app */
+  .m-palette {
+    width: 480px;
+    max-width: 90vw;
+  }
+  .m-palette-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: var(--m-control-lg);
+    padding: 0 14px;
+    border: 0;
+    border-bottom: 1px solid var(--m-hair);
+    background: transparent;
+    color: var(--m-ink);
+    font: 400 13px / 1 var(--m-font-sans);
+  }
+  .m-palette-input::placeholder {
+    color: var(--m-mist);
+  }
+  .m-palette-input:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+  .m-palette-list {
+    max-height: 312px;
+    overflow-y: auto;
+    padding-bottom: 6px;
+  }
+  /* the overlay is the lightest surface in the system, so meta text on it
+     takes fog rather than mist — mist is calibrated against the three page
+     surfaces, and loses AA once it sits on the overlay's lift */
+  .m-palette-group {
+    padding: 12px 14px 6px;
+    font: 500 10.5px / 1 var(--m-font-mono);
+    color: var(--m-fog);
+  }
+  .m-palette-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: var(--m-row-h);
+    padding: 0 14px;
+    font: 400 13px / 1 var(--m-font-sans);
+    color: var(--m-ink);
+    cursor: pointer;
+  }
+  .m-palette-row:hover {
+    background: var(--m-tint);
+  }
+  .m-palette-row[aria-selected="true"] {
+    background: var(--m-tint);
+    box-shadow: inset 2px 0 0 var(--m-gold);
+  }
+  /* what the command does, beside its name. Fog and truncating: a row is one
+     line, and a description that wraps would push the keycap off it. */
+  .m-palette-note {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--m-fog);
+  }
+  /* the key goes to the far end whether or not there is a note before it */
+  .m-palette-row .m-kbd {
+    margin-left: auto;
+  }
+  .m-palette-note + .m-kbd {
+    margin-left: 10px;
+  }
+  .m-palette-empty {
+    padding: 22px 14px;
+    font: 400 13px / 1.5 var(--m-font-sans);
+    color: var(--m-fog);
+  }
+
+  /* modal — the larger overlay: head, scrollable body, foot */
+  .m-modal {
+    width: 560px;
+    max-width: calc(100vw - 32px);
+    display: flex;
+    flex-direction: column;
+    max-height: 82vh;
+  }
+  .m-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--m-hair);
+  }
+  .m-modal-head .m-section {
+    flex: 1;
+  }
+  .m-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .m-modal-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--m-hair);
+  }
+
+  /* dialog — the small overlay: a question and two answers */
+  .m-dialog {
+    width: 400px;
+    max-width: calc(100vw - 32px);
+    padding: 22px 22px 18px;
+  }
+  .m-dialog-title {
+    font: 600 14px / 1.4 var(--m-font-sans);
+    color: var(--m-ink);
+  }
+  .m-dialog-body {
+    margin-top: 8px;
+    font: 400 13px / 1.55 var(--m-font-sans);
+    color: var(--m-fog);
+  }
+  .m-dialog-actions {
+    margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  @media (forced-colors: active) {
+    .m-overlay {
+      border: 1px solid CanvasText;
+    }
+    .m-palette-row[aria-selected="true"] {
+      outline: 1px solid Highlight;
+      outline-offset: -1px;
+    }
+  }
+}

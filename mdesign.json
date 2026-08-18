@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "css": "src/styles/mdesign.css",
+  "ui": "src/components/m",
+  "public": ".",
+  "spriteUrl": "/icons.svg",
+  "tailwind": "none"
+}

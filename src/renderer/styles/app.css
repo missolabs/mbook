@@ -1,0 +1,361 @@
+@import "tailwindcss";
+@import "./mdesign.css";
+
+/* App base rules live in @layer base so mdesign's @layer components classes
+   (which win over layered base) keep their styling — an un-layered reset here
+   would out-rank the whole component layer and strip it. */
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--m-bg);
+    color: var(--m-ink);
+    font-family: var(--m-font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Chrome shell — app-specific layout, deliberately un-layered so it sits above
+   the token/component layers. None of these selectors collide with m-* classes. */
+#app {
+  --mb-nav-w: 248px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 44px 1fr var(--m-statusbar-h);
+  height: 100vh;
+}
+
+.mb-titlebar {
+  grid-column: 1 / -1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  -webkit-app-region: drag;
+}
+
+/* The navigator overlays the editor, so the page — and this title on its
+   axis — centre to the window and never move when the rail resizes or
+   toggles. */
+.mb-doc-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 10px var(--m-font-mono);
+  color: var(--m-mist);
+}
+
+/* Sits in the drag strip, so it must opt back into clicks. */
+.mb-side-toggle {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--m-mist);
+}
+
+.mb-side-toggle:hover {
+  color: var(--m-fog);
+  background: var(--m-tint);
+}
+
+.mb-nav-toggle {
+  right: 16px;
+}
+
+/* min-height:0 lets the 1fr track shrink to the viewport so the editor's own
+   scroller owns the overflow; position:relative anchors CodeMirror's layers. */
+.mb-editor-host {
+  grid-row: 2;
+  grid-column: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mb-statusbar {
+  grid-column: 1 / -1;
+}
+
+/* The navigator — the book's one rail: chapters as section heads with their
+   pages nested beneath as ghost-sheet thumbnails (R3 — tints of the paper,
+   never panels; R5 — square corners on pages). Transparent so the vibrancy
+   stays continuous; collapse animates width with the inner width pinned so
+   content doesn't reflow mid-animation.
+
+   An OVERLAY on the editor's right edge, not a grid column: growing or
+   toggling the rail never moves the text area. */
+.mb-nav {
+  position: absolute;
+  top: 44px;
+  bottom: var(--m-statusbar-h);
+  right: 0;
+  width: var(--mb-nav-w);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--m-hair);
+  transition: width 0.18s ease;
+}
+
+.mb-nav.collapsed {
+  width: 0;
+  border-left-color: transparent;
+}
+
+/* While the edge is being dragged the width must follow the pointer, not the
+   collapse easing. */
+.mb-nav.resizing {
+  transition: none;
+}
+
+.mb-nav-scroll {
+  width: var(--mb-nav-w);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+.mb-nav-sect {
+  font: 500 10px var(--m-font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--m-mist);
+  padding: 18px 20px 8px 18px;
+  border-left: 2px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-nav-sect:hover {
+  color: var(--m-ink);
+}
+
+/* The cursor's chapter carries the open item's gold edge (R1). */
+.mb-nav-sect.current {
+  color: var(--m-fog);
+  border-left-color: var(--m-gold);
+}
+
+/* auto-fill: the rail's width decides how many pages sit per row — two at the
+   default width, three when dragged wide. */
+.mb-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 10px 12px;
+  padding: 2px 20px 4px;
+}
+
+.mb-nav-card canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 148 / 210;
+  background: var(--mb-page);
+  border: 1px solid var(--m-hair);
+  border-radius: 0;
+}
+
+.mb-nav-card:hover canvas {
+  border-color: var(--m-hair-strong);
+}
+
+.mb-nav-card.current canvas {
+  outline: 2px solid var(--m-gold);
+  outline-offset: -2px;
+}
+
+.mb-nav-num {
+  text-align: center;
+  font: 500 9px var(--m-font-mono);
+  color: var(--m-mist);
+  padding-top: 4px;
+}
+
+/* The statusbar borrows mdesign's .m-statusbar surface and voice; this pushes
+   its two ends apart and widens the framework's 10px end padding to 20px so the
+   left cell sits on the sidebar's text axis. */
+.mb-statusbar {
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+/* Translucency override — after the imports and UN-LAYERED, so it beats the
+   un-layered token definition by source order and vibrancy blurs through body.
+   html itself is clear so only body's var(--m-bg) paints the material. */
+html.theme-dark {
+  --m-bg: rgba(19, 19, 20, 0.86);
+  --mb-serif: "Literata Variable", Georgia, serif;
+  /* The A5 sheet's surface — a whisper above the backdrop so the page reads as
+     an object without breaking the vibrancy; its trim is marked by --m-hair. */
+  --mb-page: rgba(255, 255, 255, 0.02);
+}
+
+html {
+  background: transparent;
+}
+
+/* Live-preview typography — un-layered so it out-ranks CodeMirror's inline base
+   styles. Line classes (mb-title, mb-chapter, mb-fm) land on .cm-line; the rest
+   style widgets the decorations inject. */
+/* The title page: the book's one H1 owns the whole first A5 sheet (the model
+   gives it a fresh page and the fill completes it), so it composes like a real
+   title page — the title centred in the upper third, the author beneath. */
+.mb-title {
+  font-size: 2em;
+  line-height: 1.25;
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  padding: calc(48mm * var(--mb-zoom, 1)) 0 0;
+}
+
+/* Inside the title's line, so em sizes compound from its 2em: 0.44em ≈ 15px. */
+.mb-author {
+  display: block;
+  text-align: center;
+  font-size: 0.44em;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--m-fog);
+  padding-top: 1.6em;
+}
+
+.mb-chapter {
+  font-size: 1.25em;
+  text-align: left;
+  font-weight: 500;
+  padding: 2em 0 0.9em;
+}
+
+/* The chapter's auto-numbering, an eyebrow above the name. The manuscript
+   carries only the name; the ordinal comes from document order. */
+.mb-chapter-eyebrow {
+  display: block;
+  font-family: var(--m-font-mono);
+  font-size: calc(10px * var(--mb-zoom, 1));
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--m-mist);
+  padding-bottom: 0.6em;
+}
+
+/* text-indent compensates the trailing letter-spacing after the last glyph,
+   which otherwise shifts the centred ornament half a tracking-unit left. */
+.mb-ornament {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+  color: var(--m-mist);
+  letter-spacing: 0.6em;
+  text-indent: 0.6em;
+}
+
+/* Real page division. The sheet surfaces are painted by page-layer.ts into an
+   absolute layer behind the text; z-index -3 keeps it under CodeMirror's
+   selection layer (-2) so a selection still tints above the paper. */
+.mb-page-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: -3;
+  pointer-events: none;
+}
+
+.mb-page-sheet {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--mb-page);
+  border: 1px solid var(--m-hair);
+}
+
+/* The in-flow joint between sheets: the closing sheet's 22mm foot with its
+   folio, a small gap of bare backdrop, the opening sheet's 19mm head with its
+   running chapter header. All three zones scale with the page zoom. The end
+   joint is a folio zone alone. */
+.mb-folio-zone {
+  height: calc(22mm * var(--mb-zoom, 1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mb-serif);
+  font-size: calc(11px * var(--mb-zoom, 1));
+  font-style: normal;
+  font-weight: 400;
+  color: var(--m-mist);
+}
+
+.mb-page-gap {
+  height: calc(9mm * var(--mb-zoom, 1));
+}
+
+/* Stretched by page-layer.ts to complete the closing sheet to a full A5. */
+.mb-page-fill {
+  height: 0;
+}
+
+.mb-head-zone {
+  height: calc(19mm * var(--mb-zoom, 1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--m-font-mono);
+  font-size: calc(9.5px * var(--mb-zoom, 1));
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--m-mist);
+}
+
+/* The revealed (cursor-inside) frontmatter: raw YAML, dimmed to mono meta.
+   Page-internal type follows the sheet's zoom factor. */
+.mb-fm {
+  font-family: var(--m-font-mono);
+  font-size: calc(11.5px * var(--mb-zoom, 1));
+  color: var(--m-mist);
+}
+
+/* The collapsed frontmatter strip: one small-caps line of title · author.
+   Page-internal, so its size follows the zoom factor. */
+.mb-fm-strip {
+  font-family: var(--m-font-mono);
+  font-size: calc(10px * var(--mb-zoom, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.6em 0 0.9em;
+  margin-bottom: 0.5em;
+  border-bottom: 1px solid var(--m-hair);
+}
+
+.mb-fm-title {
+  color: var(--m-fog);
+}
+
+.mb-fm-dot {
+  padding: 0 0.5em;
+  color: var(--m-mist);
+}
+
+.mb-fm-author {
+  color: var(--m-mist);
+}
