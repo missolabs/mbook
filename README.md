@@ -1,19 +1,53 @@
-# mbook
+<p align="center">
+    <img src="./assets/wordmark.png" width="320">
+    <p align="center">
+        A translucent A5 book editor for macOS
+    </p>
+</p>
 
-A translucent markdown book editor for macOS. A single, focused window where
-you write plain markdown and mbook renders a real book around it: true-size A5
-pages with folios and running chapter headers, a composed title page, and a
-navigator rail of page thumbnails. Built on Electron + TypeScript, bundled
-with Bun and electron-vite.
+<br>
+
+<p align="center">
+    <img src="./assets/demo.png">
+</p>
+
+mbook is a single, focused window for writing books. You write plain markdown
+and mbook renders a real book around it: true-size A5 pages with folios and
+running chapter headers, a composed title page, auto-numbered chapters, and a
+navigator rail of page thumbnails — all on translucent chrome that lets your
+desktop breathe through.
 
 ## Development
 
+Want to hack on mbook? Just make sure you have [Bun](https://bun.sh/docs/installation) installed.
+
+### Installing the local deps
+
+Clone the project and run:
+
 ```sh
-bun install         # install dependencies
-bun run dev         # launch the app with hot reload
-bun test            # run the test suite
+bun install
+```
+
+### Run mbook
+
+```sh
+bun run dev
+```
+
+The app launches with hot reload for the renderer.
+
+### Tests and checks
+
+```sh
+bun test            # book domain test suite
 bun run typecheck   # type-check main + renderer
-bun run dist        # build the signature-less .dmg and .zip into release/
+```
+
+### Packaging
+
+```sh
+bun run dist        # signature-less .dmg and .zip into release/
 ```
 
 ## Writing conventions
