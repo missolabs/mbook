@@ -260,10 +260,19 @@ function entryTag(token: SourceToken, entry: Entry, provenance: Provenance): Tag
 
 type FormClass = "any" | "finite" | "infinitive" | "participle"
 
+type Person = "any" | "third"
+
+// "marked" admits only candidates carrying morphology (a non-empty feat):
+// the postnominal-adjective rule wants DELAF's agreement-inflected adjectives
+// (`vazio` ms), never English's featless junk ADJ readings (`brother`).
+type FeatDemand = "any" | "marked"
+
 type ContextRule = {
   prev: Pos
   prefer: Pos
   form: FormClass
+  person: Person
+  feat: FeatDemand
 }
 
 // The contextual bigram rules, tried top-down among those matching the
@@ -272,29 +281,33 @@ type ContextRule = {
 // preposition makes an ambiguous word its NOUN head/object; a pronoun subject
 // makes it a VERB; a nominal subject makes a FINITE verb reading win (`a beleza
 // era` -> ser, while `the kitchen sink` stays a noun because base-form `sink`
-// is not finite); a verb or auxiliary chains onto an INFINITIVE (`veio ver`),
-// which never flips a bare-object noun since those readings are not
-// infinitive-marked, and failing that onto a PARTICIPLE — the passive and
-// perfect periphrases (`foi comido`, `tinha visto`, `was eaten`, `had seen`).
-// Failing both chains, a post-verbal word with an ADV reading is adverbial
-// (`comeu assim`, `existe mesmo`) — a real bare-noun object (`comeu peixe`)
-// has no ADV reading and never reaches the rule — and an adverb chains a
-// following ADV-capable word into the locution (`assim mesmo`, `mesmo aí`),
-// or failing that reveals a negated/adverb-fronted verb (`não sabia`,
-// `did not see` — `see` would otherwise fall to its noun reading).
+// is not finite) — but only a THIRD-PERSON-compatible one: a noun subject
+// cannot govern `vazio` (vaziar, P1s), so `o caderno vazio` falls through to
+// the new postnominal-ADJ rule instead of inventing a first-person verb.
+// A verb or auxiliary chains onto an INFINITIVE (`veio ver`), which never
+// flips a bare-object noun since those readings are not infinitive-marked,
+// and failing that onto a PARTICIPLE — the passive and perfect periphrases
+// (`foi comido`, `tinha visto`, `was eaten`, `had seen`). Failing both
+// chains, a post-verbal word with an ADV reading is adverbial (`comeu assim`,
+// `existe mesmo`) — a real bare-noun object (`comeu peixe`) has no ADV
+// reading and never reaches the rule — and an adverb chains a following
+// ADV-capable word into the locution (`assim mesmo`, `mesmo aí`), or failing
+// that reveals a negated/adverb-fronted verb (`não sabia`, `did not see` —
+// `see` would otherwise fall to its noun reading).
 const CONTEXT_RULES: readonly ContextRule[] = [
-  { prev: "DET", prefer: "NOUN", form: "any" },
-  { prev: "ADP", prefer: "NOUN", form: "any" },
-  { prev: "PRON", prefer: "VERB", form: "any" },
-  { prev: "NOUN", prefer: "VERB", form: "finite" },
-  { prev: "PROPN", prefer: "VERB", form: "finite" },
-  { prev: "VERB", prefer: "VERB", form: "infinitive" },
-  { prev: "AUX", prefer: "VERB", form: "infinitive" },
-  { prev: "VERB", prefer: "VERB", form: "participle" },
-  { prev: "AUX", prefer: "VERB", form: "participle" },
-  { prev: "VERB", prefer: "ADV", form: "any" },
-  { prev: "ADV", prefer: "ADV", form: "any" },
-  { prev: "ADV", prefer: "VERB", form: "any" },
+  { prev: "DET", prefer: "NOUN", form: "any", person: "any", feat: "any" },
+  { prev: "ADP", prefer: "NOUN", form: "any", person: "any", feat: "any" },
+  { prev: "PRON", prefer: "VERB", form: "any", person: "any", feat: "any" },
+  { prev: "NOUN", prefer: "VERB", form: "finite", person: "third", feat: "any" },
+  { prev: "NOUN", prefer: "ADJ", form: "any", person: "any", feat: "marked" },
+  { prev: "PROPN", prefer: "VERB", form: "finite", person: "third", feat: "any" },
+  { prev: "VERB", prefer: "VERB", form: "infinitive", person: "any", feat: "any" },
+  { prev: "AUX", prefer: "VERB", form: "infinitive", person: "any", feat: "any" },
+  { prev: "VERB", prefer: "VERB", form: "participle", person: "any", feat: "any" },
+  { prev: "AUX", prefer: "VERB", form: "participle", person: "any", feat: "any" },
+  { prev: "VERB", prefer: "ADV", form: "any", person: "any", feat: "any" },
+  { prev: "ADV", prefer: "ADV", form: "any", person: "any", feat: "any" },
+  { prev: "ADV", prefer: "VERB", form: "any", person: "any", feat: "any" },
 ]
 
 function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: SyntaxData): Entry {
@@ -314,7 +327,11 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
     }
 
     const matches = candidates.filter(
-      (e) => e.pos === rule.prefer && formMatches(rule.form, e.feat, syntax.verbFeats),
+      (e) =>
+        e.pos === rule.prefer &&
+        formMatches(rule.form, e.feat, syntax.verbFeats) &&
+        personMatches(rule.person, e.feat) &&
+        featMatches(rule.feat, e.feat),
     )
 
     switch (matches.length === 0) {
@@ -343,6 +360,28 @@ function formMatches(form: FormClass, feat: string, marks: VerbFeatMarks): boole
 
 function hasPrefix(feat: string, prefixes: readonly string[]): boolean {
   return prefixes.some((prefix) => feat.startsWith(prefix))
+}
+
+// Third-person compatibility, read off the feat's own person digits: a code
+// naming only 1st/2nd person (DELAF `P1s`, `Y2s`) cannot follow a nominal
+// subject; a code with a `3` or with no person digit at all (English `PAST`,
+// `FIN`) is compatible.
+function featMatches(demand: FeatDemand, feat: string): boolean {
+  switch (demand) {
+    case "any":
+      return true
+    case "marked":
+      return feat.length > 0
+  }
+}
+
+function personMatches(person: Person, feat: string): boolean {
+  switch (person) {
+    case "any":
+      return true
+    case "third":
+      return feat.includes("3") || /[12]/.test(feat) === false
+  }
 }
 
 // Among equally-preferred candidates, one whose lemma carries a valency hint is
