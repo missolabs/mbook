@@ -423,6 +423,9 @@ html {
   position: fixed;
   inset: 0;
   z-index: 60;
+  /* A quiet scrim over the already-blurred page: a tint of the surface, not a
+     new colour — it settles the wash so the bar reads at a glance. */
+  background: rgba(19, 19, 20, 0.35);
 }
 
 /* Translucent, like everything else in the chrome: the bar is a thin dark
@@ -432,7 +435,7 @@ html {
    breathing behind the command bar is the same move the window makes over the
    desktop. */
 body.mb-cmd-open #app {
-  filter: blur(7px);
+  filter: blur(16px);
 }
 
 #app {
@@ -442,7 +445,7 @@ body.mb-cmd-open #app {
 .mb-cmd-panel {
   width: 560px;
   margin: 13vh auto 0;
-  background: rgba(19, 19, 20, 0.55);
+  background: rgba(19, 19, 20, 0.72);
   border: 1px solid var(--m-hair);
   box-shadow: var(--m-overlay-shadow);
 }
