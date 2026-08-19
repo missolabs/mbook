@@ -256,6 +256,14 @@ describe("Murakami: the woman who called — relatives and the perfect", () => {
     expect(relation(sentence, "object-of", "name", "gave")).toBeDefined()
   })
 
+  it("resolves an OBJECT relative — the letter is what the priest burned", () => {
+    const sentence = only("She kept the letter which the priest burned.")
+
+    expect(relation(sentence, "object-of", "letter", "kept")).toBeDefined()
+    expect(relation(sentence, "object-of", "letter", "burned")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "burned")).toEqual(["priest"])
+  })
+
   it("hands the perfect participle its object across had", () => {
     const sentence = only("Kumiko had seen the cat before.")
 

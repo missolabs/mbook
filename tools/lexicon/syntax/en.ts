@@ -12,11 +12,15 @@ function p(pos: Pos, quant: Quant): PatItem {
 
 export const EN_SYNTAX: SyntaxData = {
   closedClass: {
+    // `which` is deliberately NOT here (only in pronouns): in prose the
+    // relative use dominates the interrogative determiner, and dual
+    // membership would abstain into Moby's junk NOUN reading, letting an NP
+    // swallow it ("the letter which" heading on `which`).
     determiners: [
       "the", "a", "an", "this", "that", "these", "those", "my", "your", "his",
       "her", "its", "our", "their", "some", "any", "no", "every", "each",
       "either", "neither", "another", "all", "both", "half", "several", "many",
-      "much", "few", "little", "more", "most", "such", "what", "which", "whose",
+      "much", "few", "little", "more", "most", "such", "what", "whose",
     ],
     pronouns: [
       "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us",

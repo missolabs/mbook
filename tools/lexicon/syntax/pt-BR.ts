@@ -116,7 +116,10 @@ export const PT_BR_SYNTAX: SyntaxData = {
     { lemma: "voltar", frame: "intransitive" },
     { lemma: "sair", frame: "intransitive" },
     { lemma: "entrar", frame: "intransitive" },
-    { lemma: "subir", frame: "intransitive" },
+    // `subir` is transitive: `subiu os degraus / a escada / o morro` is the
+    // literary norm, and the plain `subiu ao templo` PP shape claims no
+    // object either way.
+    { lemma: "subir", frame: "transitive" },
     { lemma: "descer", frame: "intransitive" },
     { lemma: "desaparecer", frame: "intransitive" },
     { lemma: "sumir", frame: "intransitive" },

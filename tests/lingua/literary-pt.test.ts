@@ -156,6 +156,28 @@ describe("Mishima: beauty was a sentence — copular predicates", () => {
   })
 })
 
+describe("Mishima: the confiscated notebook — an OBJECT relative resolves too", () => {
+  it("hands the embedded verb its antecedent as object, alongside the matrix object", () => {
+    const sentence = only("Kenzō guardou o caderno que o monge confiscara.")
+
+    expect(relation(sentence, "object-of", "caderno", "guardou")).toBeDefined()
+    expect(relation(sentence, "object-of", "caderno", "confiscara")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "confiscara")).toEqual(["monge"])
+  })
+
+  it("hops the appositive comma to reach the antecedent", () => {
+    const sentence = only("Maria, que o monge amava, partiu.")
+
+    expect(relation(sentence, "object-of", "Maria", "amava")).toBeDefined()
+  })
+
+  it("claims no object in a SUBJECT relative — nothing stands between pronoun and verb", () => {
+    const sentence = only("O homem que comeu dormiu.")
+
+    expect(sentence.relations.filter((r) => r.kind === "object-of")).toEqual([])
+  })
+})
+
 describe("Mishima: the stuttering monk — a relative clause defers to its antecedent", () => {
   const sentence = only("O monge que gaguejava contemplava o templo.")
 

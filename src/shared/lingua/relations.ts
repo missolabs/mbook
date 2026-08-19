@@ -70,6 +70,7 @@ export function buildRelations(input: RelationInput): readonly Relation[] {
       case "VP":
         addSubject(relations, input, ci, pinnedSubjects)
         addComplementOrObject(relations, input, ci, pinnedSubjects)
+        addRelativeObject(relations, input, ci)
         addPredicate(relations, input, ci, pinnedSubjects)
         addPresentationalSubject(relations, input, ci, pinnedSubjects)
         addInfinitiveChain(relations, input, ci)
@@ -491,6 +492,143 @@ function adjectiveAfter(tokens: readonly AnalyzedToken[], start: number): Option
   }
 
   return { kind: "none" }
+}
+
+// An OBJECT relative clause: in `o caderno que o sacerdote confiscara` the
+// relative pronoun is the verb's OBJECT and stands for its antecedent
+// (confiscara -> caderno). The mirror of addSubject's relative re-pointing,
+// which only covers subject relatives (`o monge que gaguejava`). Fires when:
+//   * the verb admits an object yet claimed none (no object-of/complement-of);
+//   * its clause opens on a declared relative pronoun, reached leftward over
+//     content tokens only;
+//   * a nominal sits directly before the pronoun — the antecedent (one comma
+//     may intervene for the appositive shape `Maria, que o monge amava`); a
+//     VERB there means a complement clause (`disse que o monge partiu`), not
+//     a relative, and the rule stands down;
+//   * at least one NP stands BETWEEN pronoun and verb — that NP is the
+//     clause's own subject. With nothing between, the relative is a SUBJECT
+//     relative (`o homem que comeu`) and the object is genuinely absent.
+function addRelativeObject(relations: Relation[], input: RelationInput, ci: number): void {
+  const vp = input.chunks[ci]!
+
+  switch (takesObject(verbLemma(input.tokens, vp), input.syntax.valency)) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const claimed = relations.some(
+    (r) => (r.kind === "object-of" || r.kind === "complement-of") && r.head === vp.head,
+  )
+
+  switch (claimed) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const rel = relativeOpenerBefore(input, vp.from)
+
+  switch (rel.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const antecedent = antecedentBefore(input, rel.value)
+
+  switch (antecedent.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const subjectBetween = input.chunks.some(
+    (c) => c.kind === "NP" && c.from > rel.value && c.to <= vp.from,
+  )
+
+  switch (subjectBetween) {
+    case false:
+      return
+    case true:
+      relations.push(relation("object-of", antecedent.value, vp.head, "heuristic"))
+      return
+  }
+}
+
+// The nearest relative-pronoun token left of `from`, reached across content
+// tokens only — any punctuation on the way means the pronoun belongs to
+// another clause.
+function relativeOpenerBefore(input: RelationInput, from: number): Optional<number> {
+  for (let at = from - 1; at >= 0; at--) {
+    const token = input.tokens[at]!
+
+    switch (token.role) {
+      case "punctuation":
+        return { kind: "none" }
+      case "content":
+        break
+    }
+
+    switch (input.syntax.relativePronouns.includes(token.tagged.token.text.toLowerCase())) {
+      case true:
+        return { kind: "some", value: at }
+      case false:
+        continue
+    }
+  }
+
+  return { kind: "none" }
+}
+
+// The nominal directly before the relative pronoun — hopping a single comma
+// for the appositive shape — resolved to its chunk's head token.
+function antecedentBefore(input: RelationInput, rel: number): Optional<number> {
+  let at = rel - 1
+
+  switch (at >= 0 && isComma(input.tokens[at])) {
+    case true:
+      at--
+      break
+    case false:
+      break
+  }
+
+  switch (at < 0) {
+    case true:
+      return { kind: "none" }
+    case false:
+      break
+  }
+
+  const token = input.tokens[at]!
+
+  switch (token.role) {
+    case "punctuation":
+      return { kind: "none" }
+    case "content":
+      break
+  }
+
+  switch (token.tagged.pos === "NOUN" || token.tagged.pos === "PROPN") {
+    case false:
+      return { kind: "none" }
+    case true:
+      break
+  }
+
+  const holder = input.chunks.find((c) => at >= c.from && at < c.to)
+
+  switch (holder === undefined) {
+    case true:
+      return { kind: "some", value: at }
+    case false:
+      return { kind: "some", value: holder!.head }
+  }
 }
 
 // A presentational (unaccusative/existential) verb takes a POSTVERBAL subject:
