@@ -262,6 +262,23 @@ describe("Murakami: hyphen compounds survive the clitic split", () => {
   })
 })
 
+describe("Mishima: a preposition or clitic wants the infinitive, not the subjunctive homograph", () => {
+  it("reads `sem mover` as the infinitive and chains it onto the smile", () => {
+    const sentence = only("Yuriko sorriu sem mover os olhos.")
+
+    expect(tagged(sentence, "mover").feat).toBe("W")
+    expect(relation(sentence, "complement-of", "mover", "sorriu")).toBeDefined()
+    expect(relation(sentence, "object-of", "olhos", "mover")).toBeDefined()
+  })
+
+  it("reads the clitic shape `se despedir` the same way", () => {
+    const sentence = only("Ela desligou sem se despedir.")
+
+    expect(tagged(sentence, "despedir").feat).toBe("W")
+    expect(relation(sentence, "complement-of", "despedir", "desligou")).toBeDefined()
+  })
+})
+
 describe("Murakami: the perfect periphrasis carries the object", () => {
   const sentence = only("Kumiko tinha visto o poço no quintal.")
 

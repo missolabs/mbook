@@ -278,8 +278,11 @@ type ContextRule = {
 // The contextual bigram rules, tried top-down among those matching the
 // left-neighbour POS — the first rule some candidate satisfies wins, so a
 // later rule for the same neighbour is an ordered fallback. A determiner or
-// preposition makes an ambiguous word its NOUN head/object; a pronoun subject
-// makes it a VERB; a nominal subject makes a FINITE verb reading win (`a beleza
+// preposition first tries a marked INFINITIVE (`sem mover`, `para ver` — the
+// infinitive/future-subjunctive homograph must not read as subjunctive) and
+// only then makes an ambiguous word its NOUN head/object; a pronoun likewise
+// tries the infinitive (the clitic shape `se despedir`) before the plain
+// VERB; a nominal subject makes a FINITE verb reading win (`a beleza
 // era` -> ser, while `the kitchen sink` stays a noun because base-form `sink`
 // is not finite) — but only a THIRD-PERSON-compatible one: a noun subject
 // cannot govern `vazio` (vaziar, P1s), so `o caderno vazio` falls through to
@@ -296,7 +299,9 @@ type ContextRule = {
 // `see` would otherwise fall to its noun reading).
 const CONTEXT_RULES: readonly ContextRule[] = [
   { prev: "DET", prefer: "NOUN", form: "any", person: "any", feat: "any" },
+  { prev: "ADP", prefer: "VERB", form: "infinitive", person: "any", feat: "any" },
   { prev: "ADP", prefer: "NOUN", form: "any", person: "any", feat: "any" },
+  { prev: "PRON", prefer: "VERB", form: "infinitive", person: "any", feat: "any" },
   { prev: "PRON", prefer: "VERB", form: "any", person: "any", feat: "any" },
   { prev: "NOUN", prefer: "VERB", form: "finite", person: "third", feat: "any" },
   { prev: "NOUN", prefer: "ADJ", form: "any", person: "any", feat: "marked" },
