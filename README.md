@@ -17,6 +17,54 @@ running chapter headers, a composed title page, auto-numbered chapters, and a
 navigator rail of page thumbnails — all on translucent chrome that lets your
 desktop breathe through.
 
+## The book that reads itself
+
+<p align="center">
+    <img src="./assets/lingua-poco.png">
+</p>
+
+While you write, mbook parses the manuscript with a real linguistic engine —
+no cloud, no model, just dictionaries and grammar. A 1.2M-entry Brazilian
+Portuguese lexicon (Unitex-PB DELAF) and a 485k-entry English one
+(AGID + Moby + VarCon) ship compiled into the app; every save is tokenized,
+tagged, chunked and read for relations:
+
+- **Who did what.** Subjects, objects, copular predicates, clausal
+  complements — `compreendeu que o mundo tinha dois lados`.
+- **What was done, and by whom.** Passives find their agents: in
+  `a cidade foi tomada pela espiral`, the spiral did it.
+- **Which stairs? From where?** Genitive chains qualify every thing
+  (`os degraus do templo`), relative clauses hand verbs their antecedents
+  (`o caderno que o sacerdote confiscara` — he confiscated *the notebook*),
+  and place relatives locate one thing in another
+  (`o quintal, onde um poço esperava` — the well is in the yard).
+- **What went unsaid.** An elided object resolves across sentences:
+  *"O espaguete passou do ponto. Minoru comeu assim mesmo."* — the engine
+  knows what he ate. That's the dashed edge above.
+- **Who is speaking.** Dialogue lines and written quotes attribute to the
+  cast, so every voice on the page has an owner.
+
+Characters are declared once in frontmatter and bound in prose with light
+glyphs — visible when you want a name on the page, silent when you don't:
+
+| You type | mbook understands |
+| --- | --- |
+| `character: Minoru` in frontmatter | Minoru joins the cast |
+| `@[Minoru] desceu ao quintal` | a visible mention, pinned as that sentence's subject |
+| `{a mulher do telefone}[Kaede]` | display text of your choosing, bound to Kaede at the point of use |
+| `—[Kaede] Você ainda escuta…` | a dialogue line, spoken by Kaede |
+| `“[Kenzō] A morte é o último ornamento…”` | a written quote, in Kenzō's hand |
+
+<p align="center">
+    <img src="./assets/lingua-mar.png">
+</p>
+
+Every fact is grounded — chapter and line — because it came from your
+sentences, not from a guess. Both graphs above were produced by the engine
+alone, from the two demo manuscripts, with no hand labeling. Analysis runs
+off the save path into a local SQLite database, so the editor never waits
+for it.
+
 ## Development
 
 Want to hack on mbook? Just make sure you have [Bun](https://bun.sh/docs/installation) installed.
