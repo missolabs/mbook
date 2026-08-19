@@ -1,6 +1,7 @@
-// The analysis pipeline seam: a save or open hands a book's path and content
-// here, and — off the critical path — the book is analyzed and persisted. Three
-// invariants shape it:
+// The build scheduler: a save or open hands a book's path and content here,
+// and — off the critical path — the driver compiles the book and the backend
+// persists it, the way an IDE's background compilation never blocks typing.
+// Three invariants shape it:
 //   * a save must NEVER fail or slow because of analysis, so scheduling returns
 //     at once and the work is deferred (setImmediate) with every failure logged
 //     as a value, never thrown;
@@ -16,8 +17,8 @@ import { join } from "node:path"
 
 import { app } from "electron"
 
-import { analyzeBook } from "../../shared/lingua/book-analysis"
-import type { BookAnalysis, LexiconSource } from "../../shared/lingua/book-analysis"
+import { analyzeBook } from "../../shared/lingua/driver"
+import type { BookAnalysis, LexiconSource } from "../../shared/lingua/driver"
 import { dictId } from "../../shared/lingua/language"
 import type { Language } from "../../shared/lingua/language"
 import type { Lexicon } from "../../shared/lingua/lexicon"
@@ -27,7 +28,7 @@ import type { Result } from "../../shared/result"
 import { getLingua } from "../lingua-holder"
 import type { Lingua } from "../lingua"
 import type { DictLang } from "../lingua-paths"
-import { analysisToRows } from "./rows"
+import { analysisToRows } from "./lower"
 import type { BookRecord, LinguaStore, StoreError } from "./store"
 
 const latest = new Map<string, string>()

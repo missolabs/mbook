@@ -1,10 +1,13 @@
-// The paragraph-level discourse pass: cross-sentence links no sentence-local
-// Relation can carry, because a Relation's endpoints are token indices inside
-// ONE sentence. The single kind so far is the elided object — "O espaguete
-// passou do ponto. Minoru comeu assim mesmo." leaves `comer` (declared
-// transitive) with nothing after relation building, and Portuguese licenses
-// dropping an object whose referent is discourse-given. The pass is deliberately
-// narrow and honest:
+// The dataflow pass — cross-statement analysis. Sentence-local Relations
+// cannot reach across statements (their endpoints are token indices inside
+// ONE sentence), so this pass runs after the whole paragraph is bound and
+// links what a statement consumes from its predecessors — the same shape as
+// a compiler's dataflow analysis over a basic block, where the paragraph is
+// the block and cross-paragraph flow is deliberately out of scope. The single
+// link kind so far is the elided object — "O espaguete passou do ponto.
+// Minoru comeu assim mesmo." leaves `comer` (declared transitive) with
+// nothing after binding, and Portuguese licenses dropping an object whose
+// referent is discourse-given. The pass is deliberately narrow and honest:
 //   * only verbs the valency data marks transitive/ditransitive qualify — an
 //     unlisted verb defaulting to "may take an object" is not evidence one was
 //     elided;
@@ -23,9 +26,9 @@
 // within that sentence): the same coordinates Relation uses, lifted one level.
 
 import type { Optional } from "../optional"
-import type { AnchoredSpan, Sentence } from "./analysis"
+import type { AnchoredSpan, Sentence } from "./pipeline"
 import type { SyntaxData, ValencyFrame, ValencyHint } from "./model"
-import type { Relation } from "./relations"
+import type { Relation } from "./binder"
 
 export type DiscourseLinkKind = "elided-object"
 
@@ -46,7 +49,7 @@ export type DiscourseInput = {
   syntax: SyntaxData
 }
 
-export function buildDiscourseLinks(input: DiscourseInput): readonly DiscourseLink[] {
+export function linkDiscourse(input: DiscourseInput): readonly DiscourseLink[] {
   const links: DiscourseLink[] = []
 
   input.sentences.forEach((sentence, si) => {

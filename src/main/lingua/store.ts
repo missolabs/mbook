@@ -1,4 +1,5 @@
-// The SQLite edge for the linguistic engine: the only module that speaks SQL. It
+// The backend emitter: lingua.db is the compilation's object file, and this
+// is the only module that speaks SQL to produce it. It
 // owns lingua.db in userData — schema v3 (user_version = 3; v2 added sentence
 // location: chapter_idx, chapter_title, line, col; v3 added discourse_links,
 // the cross-sentence layer sentence-local relations cannot carry) — and exposes a thin
@@ -26,7 +27,7 @@ import type {
   RelationRow,
   SentenceRow,
   TokenRow,
-} from "./rows"
+} from "./lower"
 
 export type BookRecord = {
   path: string

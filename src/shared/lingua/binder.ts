@@ -1,7 +1,11 @@
-// Rule-based shallow dependencies over one sentence's chunks: subject-of,
-// object-of, complement-of and modifier-of. This is a clause-level positional
-// pass — both supported languages are SVO, so one engine with no per-language
-// parameters covers them — refined by data-driven gates from SyntaxData:
+// The binder — semantic analysis over one sentence's phrases. Where a
+// compiler's binder resolves names to declarations, this one resolves phrases
+// to ROLES: subject-of, object-of, complement-of, modifier-of, predicate-of,
+// agent-of and located-in. Authored declarations outrank inference — a
+// resolved `@[Name]` mention PINS its NP as subject before any heuristic
+// runs. The pass itself is clause-level and positional — both supported
+// languages are SVO, so one engine with no per-language parameters covers
+// them — refined by data-driven gates from SyntaxData:
 //   * verb valency: a verb whose lemma is marked intransitive, copular or
 //     prepositional takes no direct object, so a positionally-adjacent NP after
 //     it is not made its object;
@@ -19,7 +23,7 @@
 // finds what the verb takes.
 //
 // Dependent and head are token indices into the sentence's `tokens` array (chunk
-// heads, or the modifier token itself), the same coordinate the chunker and
+// heads, or the modifier token itself), the same coordinate the parser and
 // glyph anchors use. A complement-of's dependent is the LEFTMOST token of the
 // complement — the complementizer for a clausal complement, the infinitive verb
 // itself for an infinitival chain. That token always exists when the relation
@@ -28,8 +32,8 @@
 // found; the embedded clause's own VP still earns its own subject/object
 // relations.
 
-import type { Chunk } from "./chunk"
-import type { AnalyzedToken } from "./tag"
+import type { Chunk } from "./parser"
+import type { AnalyzedToken } from "./tagger"
 import type { SyntaxData, ValencyFrame, ValencyHint, VerbFeatMarks } from "./model"
 import type { Optional } from "../optional"
 
@@ -61,7 +65,7 @@ export type RelationInput = {
   syntax: SyntaxData
 }
 
-export function buildRelations(input: RelationInput): readonly Relation[] {
+export function bind(input: RelationInput): readonly Relation[] {
   const pinnedSubjects = resolvePins(input.chunks, input.pins)
 
   const relations: Relation[] = []

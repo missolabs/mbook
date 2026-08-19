@@ -1,6 +1,7 @@
-// POS / morphology tagging over one sentence's tokens. Each word token is
-// resolved to a single {lemma, pos, feat} plus a provenance marker recording how
-// the choice was made, so later graph work can weigh its confidence:
+// The tagger — token classification against the compiled symbol table. Each
+// word token is looked up in the lexicon and resolved to a single
+// {lemma, pos, feat}, plus a provenance marker recording how the choice was
+// made, so later graph work can weigh its confidence:
 //   * "lexicon"      — the dictionary offered candidates and a rule picked one;
 //   * "closed-class" — a determiner/pronoun/preposition/conjunction (or an
 //                      English clitic) is a deterministic function-word winner;
@@ -9,19 +10,20 @@
 //                      unknown is a proper noun; digits are a number);
 //   * "default"      — nothing else fired, so it is a common noun.
 //
-// Disambiguation among lexicon candidates is a small, documented rule table,
-// not a trained model: closed-class membership is decisive; otherwise one
-// left-context bigram rule may prefer a POS (see CONTEXT_RULES), and with no
-// context a fixed content-first priority breaks the tie. The rules that prefer
-// a VERB reading after a nominal or another verb are gated on the candidate's
-// verb-form class (finite / infinitive), read from the dictionary's own
-// VerbFeatMarks — the rule engine stays language-blind and the language data
-// says which morphology codes mean what.
+// Disambiguation among lexicon candidates is a table-driven decision
+// procedure, not a trained model — the same shape as a parser's precedence
+// table: closed-class membership is decisive; otherwise the first matching
+// left-context bigram rule wins (CONTEXT_RULES, tried in authored order), and
+// with no context a fixed content-first priority breaks the tie. The rules
+// that prefer a VERB reading after a nominal or another verb are gated on the
+// candidate's verb-form class (finite / infinitive / participle), read from
+// the dictionary's own VerbFeatMarks — the rule engine stays language-blind
+// and the language data says which morphology codes mean what.
 
 import type { Optional } from "../optional"
 import type { Lexicon, VariantScope } from "./lexicon"
 import type { ClosedClass, Entry, Pos, SuffixRule, SyntaxData, ValencyHint, VerbFeatMarks } from "./model"
-import type { SourceToken } from "./tokenize"
+import type { SourceToken } from "./lexer"
 
 export type Provenance =
   | "lexicon"
@@ -510,7 +512,7 @@ function suffixGuess(lower: string, rules: readonly SuffixRule[]): Optional<Pos>
 
 type Clitic = { kind: "none" } | { kind: "some"; value: TaggedToken }
 
-// The English clitic pieces the tokenizer split off. The lexicon has none of
+// The English clitic pieces the lexer split off. The lexicon has none of
 // them, so this closed table is their only tagger. `'s` and `'d` are genuinely
 // ambiguous (is/has, would/had); we take the commoner auxiliary reading and
 // record it — a documented compromise, not a lookup failure.

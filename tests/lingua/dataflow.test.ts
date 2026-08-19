@@ -6,10 +6,10 @@ import { scanLine } from "../../src/shared/book/glyphs"
 import type { Cast } from "../../src/shared/book/cast"
 import { openLexicon } from "../../src/shared/lingua/lexicon"
 import type { Lexicon } from "../../src/shared/lingua/lexicon"
-import { analyzeParagraph } from "../../src/shared/lingua/analysis"
-import type { ParagraphAnalysis } from "../../src/shared/lingua/analysis"
-import { analyzeBook } from "../../src/shared/lingua/book-analysis"
-import type { LexiconSource } from "../../src/shared/lingua/book-analysis"
+import { analyzeParagraph } from "../../src/shared/lingua/pipeline"
+import type { ParagraphAnalysis } from "../../src/shared/lingua/pipeline"
+import { analyzeBook } from "../../src/shared/lingua/driver"
+import type { LexiconSource } from "../../src/shared/lingua/driver"
 
 const DICT_DIR = join(import.meta.dir, "../../resources/dictionaries")
 

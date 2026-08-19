@@ -12,9 +12,9 @@ import { scanLine } from "../../src/shared/book/glyphs"
 import type { Cast } from "../../src/shared/book/cast"
 import { openLexicon } from "../../src/shared/lingua/lexicon"
 import type { Lexicon } from "../../src/shared/lingua/lexicon"
-import { analyzeParagraph } from "../../src/shared/lingua/analysis"
-import type { ParagraphAnalysis, Sentence } from "../../src/shared/lingua/analysis"
-import type { Relation, RelationKind } from "../../src/shared/lingua/relations"
+import { analyzeParagraph } from "../../src/shared/lingua/pipeline"
+import type { ParagraphAnalysis, Sentence } from "../../src/shared/lingua/pipeline"
+import type { Relation, RelationKind } from "../../src/shared/lingua/binder"
 
 const DICT_DIR = join(import.meta.dir, "../../resources/dictionaries")
 

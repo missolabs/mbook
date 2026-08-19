@@ -1,26 +1,40 @@
-// The step's composition: one paragraph of source text and its glyph spans in,
-// a fully tagged, sentence-segmented analysis out. The flow is a flat pipeline —
-// strip the hidden sigil ranges, tokenize the visible text, re-anchor every
-// token onto the original source coordinates, segment into sentences, tag each,
-// then re-anchor the glyph spans onto the sentences/tokens they cover. The
-// output is the exact surface the next step (chunking / relations) extends: a
-// Sentence is an open record it will grow `chunks`/`relations` on.
+// The front end. One paragraph in, its complete intermediate representation
+// out, produced by a classic pass pipeline — every pass a total, pure function
+// from the previous stage's IR to the next:
+//
+//   manuscript text ──preprocess──▶ visible text + source map   preprocessor.ts
+//   visible text    ──lex─────────▶ tokens                      lexer.ts
+//   tokens          ──segment─────▶ sentences (statements)      segmenter.ts
+//   sentence        ──tagSentence─▶ classified tokens           tagger.ts
+//   classified      ──parsePhrases▶ phrases (NP/VP/PP)          parser.ts
+//   phrases         ──bind────────▶ relations (roles)           binder.ts
+//   sentences       ──linkDiscourse▶ cross-statement links      dataflow.ts
+//
+// Each pass's IR is owned by the module that produces it, the way a compiler
+// phase owns its output representation. The dictionary is the compiled symbol
+// table (lexicon.ts, built by tools/lexicon — the toolchain's other half),
+// the language picks the target (language.ts), and the main process is the
+// backend: lower.ts flattens this IR to rows, store.ts emits lingua.db — the
+// object file. Source fidelity is the invariant the whole ladder preserves:
+// every token, span and relation can point back to the exact manuscript
+// offsets the author typed, through the preprocessor's source map.
 
-import type { Binding, LineSpan, Range } from "../book/glyphs"
-import { chunkSentence } from "./chunk"
-import type { Chunk } from "./chunk"
-import { buildDiscourseLinks } from "./discourse"
-import type { DiscourseLink } from "./discourse"
+import type { Binding, LineSpan } from "../book/glyphs"
+import { parsePhrases } from "./parser"
+import type { Chunk } from "./parser"
+import { linkDiscourse } from "./dataflow"
+import type { DiscourseLink } from "./dataflow"
 import type { Language } from "./language"
 import { variantScope } from "./language"
 import type { Lexicon } from "./lexicon"
-import { buildRelations } from "./relations"
-import type { Relation, SubjectPin } from "./relations"
-import { segment } from "./sentences"
-import { tagSentence } from "./tag"
-import type { AnalyzedToken } from "./tag"
-import { tokenize } from "./tokenize"
-import type { Span, SourceToken, Token } from "./tokenize"
+import { bind } from "./binder"
+import type { Relation, SubjectPin } from "./binder"
+import { preprocess, reanchor } from "./preprocessor"
+import { segment } from "./segmenter"
+import { tagSentence } from "./tagger"
+import type { AnalyzedToken } from "./tagger"
+import { lex } from "./lexer"
+import type { Span, SourceToken } from "./lexer"
 
 export type ParagraphInput = {
   text: string
@@ -69,13 +83,14 @@ export type ParagraphAnalysis = {
 }
 
 export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
-  const hidden = collectHidden(input.spans)
-  const stripped = strip(input.text, hidden)
-
   const scope = variantScope(input.language)
 
-  // Whole-form oracle: a connected word (hyphen/apostrophe) the lexicon knows
-  // whole — exactly or casefolded — is never split by the tokenizer.
+  // Preprocessing: sigils out, source map kept.
+  const source = preprocess(input.text, input.spans)
+
+  // Lexical analysis, re-anchored onto manuscript offsets through the map.
+  // The whole-form oracle lets the lexer keep a hyphenated word the symbol
+  // table already knows whole (`quinta-feira`) instead of splitting it.
   const keepWhole = (word: string): boolean => {
     switch (input.lexicon.lookup(word, scope).length > 0) {
       case true:
@@ -85,30 +100,25 @@ export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
     }
   }
 
-  const tokens = tokenize(stripped.text, input.language, keepWhole)
-  const sourceTokens = tokens.map((token) => toSource(token, stripped.map))
-  const raw = segment(sourceTokens, input.lexicon.syntax.closedClass.abbreviations)
+  const tokens = lex(source.text, input.language, keepWhole).map((token) => reanchor(token, source.map))
 
-  const sentences = raw.map((sentence) => {
-    const tokens = tagSentence({ tokens: sentence.tokens, lexicon: input.lexicon, scope, syntax: input.lexicon.syntax })
-    const source = sentenceSpan(sentence.tokens)
-    const chunks = chunkSentence(tokens, input.lexicon.syntax.chunkRules)
-    const base: Sentence = { source, tokens, chunks, relations: [], attribution: { kind: "narration" } }
+  // Statement segmentation: the paragraph's sentences are its compilation
+  // statements; each runs the middle passes independently.
+  const raw = segment(tokens, input.lexicon.syntax.closedClass.abbreviations)
 
-    const pins = subjectPins(base, input.spans)
-    const relations = buildRelations({ tokens, chunks, pins, syntax: input.lexicon.syntax })
-    const attribution = deriveAttribution(base, input.spans)
+  const sentences = raw.map((sentence) => analyzeSentence(sentence.tokens, input))
 
-    return { source, tokens, chunks, relations, attribution }
-  })
-
+  // Symbol-use anchoring: every authored glyph span is resolved onto the
+  // sentence and tokens it covers — the uses table the dataflow pass and the
+  // backend both read.
   const spans = input.spans.map((span) => ({ span, anchor: anchorSpan(span, sentences) }))
 
-  const discourse = buildDiscourseLinks({ sentences, spans, syntax: input.lexicon.syntax })
+  // Cross-statement dataflow closes the paragraph.
+  const discourse = linkDiscourse({ sentences, spans, syntax: input.lexicon.syntax })
 
   return {
     text: input.text,
-    stripped: stripped.text,
+    stripped: source.text,
     language: input.language,
     sentences,
     spans,
@@ -116,62 +126,28 @@ export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
   }
 }
 
-type Stripped = { text: string; map: readonly number[] }
+// The per-statement middle end: classification, shallow parsing, binding and
+// voice resolution, in that order — each pass consuming exactly the IR the
+// previous one produced.
+function analyzeSentence(tokens: readonly SourceToken[], input: ParagraphInput): Sentence {
+  const scope = variantScope(input.language)
 
-// Remove every hidden sigil range from the paragraph text, keeping a map from
-// each surviving character's stripped index back to its source index — the
-// bridge that carries token offsets back onto the text the author typed.
-function strip(text: string, hidden: readonly Range[]): Stripped {
-  const blocked = new Array(text.length).fill(false)
+  const classified = tagSentence({ tokens, lexicon: input.lexicon, scope, syntax: input.lexicon.syntax })
 
-  for (const range of hidden) {
-    blockRange(blocked, range, text.length)
-  }
+  const source = sentenceSpan(tokens)
 
-  let result = ""
-  const map: number[] = []
+  const phrases = parsePhrases(classified, input.lexicon.syntax.chunkRules)
 
-  for (let i = 0; i < text.length; i++) {
-    switch (blocked[i]) {
-      case true:
-        continue
-      case false:
-        result += text[i]
-        map.push(i)
-        continue
-    }
-  }
+  const base: Sentence = { source, tokens: classified, chunks: phrases, relations: [], attribution: { kind: "narration" } }
 
-  return { text: result, map }
-}
+  // Authored bindings first (the `@[Name]` pins are declarations), then the
+  // binder resolves every remaining role heuristically.
+  const pins = subjectPins(base, input.spans)
+  const relations = bind({ tokens: classified, chunks: phrases, pins, syntax: input.lexicon.syntax })
 
-function blockRange(blocked: boolean[], range: Range, length: number): void {
-  const end = Math.min(range.to, length)
+  const attribution = deriveAttribution(base, input.spans)
 
-  for (let i = range.from; i < end; i++) {
-    blocked[i] = true
-  }
-}
-
-function collectHidden(spans: readonly LineSpan[]): readonly Range[] {
-  const ranges: Range[] = []
-
-  for (const span of spans) {
-    for (const range of span.hidden) {
-      ranges.push(range)
-    }
-  }
-
-  return ranges
-}
-
-function toSource(token: Token, map: readonly number[]): SourceToken {
-  return {
-    kind: token.kind,
-    text: token.text,
-    stripped: { from: token.from, to: token.to },
-    source: { from: map[token.from]!, to: map[token.to - 1]! + 1 },
-  }
+  return { source, tokens: classified, chunks: phrases, relations, attribution }
 }
 
 function sentenceSpan(tokens: readonly SourceToken[]): Span {

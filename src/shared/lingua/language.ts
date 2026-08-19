@@ -1,8 +1,9 @@
-// The book-language consumer: which of the three supported languages a book is
-// written in, read from its frontmatter, and how that choice selects a compiled
-// dictionary and a spelling-variant scope. This is the one place a raw
-// frontmatter string becomes a precise Language (parse, don't validate); every
-// later step speaks the union, never the string.
+// Target selection: which of the three supported languages a book is written
+// in, read from its frontmatter, and how that choice selects a compiled
+// dictionary and a spelling-variant scope — the pipeline's equivalent of a
+// target triple. This is the one place a raw frontmatter string becomes a
+// precise Language (parse, don't validate); every later pass speaks the
+// union, never the string.
 
 import type { BookDoc } from "../book/parse"
 import type { VariantScope } from "./lexicon"

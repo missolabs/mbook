@@ -30,6 +30,16 @@ edit).
 - The book domain (`src/shared/book/`) is pure and fully tested; the renderer
   derives everything (navigator, statusbar, page joints) from one debounced
   `PageTracker.recompute` fan-out in `src/renderer/main.ts`.
+- The linguistic engine (`src/shared/lingua/`) is structured as a compiler:
+  preprocessor (sigils out, source map kept) → lexer → segmenter (statement
+  splitting) → tagger (classification against the compiled symbol table) →
+  parser (shallow phrase grammar shipped as data) → binder (roles: subject,
+  object, predicate, agent, located-in) → dataflow (cross-statement links).
+  `pipeline.ts` is the front end, `driver.ts` the per-book compilation driver
+  (paragraphs are translation units, chapter/line/col the debug info), and
+  the main process is the backend: `lower.ts` flattens IR to rows,
+  `store.ts` emits `lingua.db`. Each pass owns its output IR; `.dict` files
+  are compiled offline by `tools/lexicon` (format in FORMAT.md).
 - Pages render as real A5 sheets: `editor/page-breaks.ts` puts joint widgets
   (folio / gap / running header) in the flow, `editor/page-layer.ts` paints
   sheet surfaces behind the text and stretches each joint's fill so every

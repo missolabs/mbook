@@ -1,4 +1,6 @@
-// The runtime .dict reader: raw bytes in, a queryable Lexicon out, or a typed
+// The compiled symbol table. A .dict file is the toolchain's other half —
+// tools/lexicon compiles open corpora into it offline — and this reader is
+// the runtime loader: raw bytes in, a queryable Lexicon out, or a typed
 // LexiconError. This is the boundary where an untrusted file becomes a precise
 // type (parse, don't validate) — every structural read is bounds-checked and a
 // corrupt or truncated file is a value, never a throw. It is the executable

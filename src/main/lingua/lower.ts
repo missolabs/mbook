@@ -1,14 +1,15 @@
-// The pure projection from a BookAnalysis onto the store's relational rows. No
-// sqlite here: this maps the analysis tree to flat, insertable records and is
-// unit-tested on its own, so the store edge (store.ts) only has to bind these
-// rows to prepared statements. Token indices are kept faithful to the analysis'
-// own per-sentence token array — punctuation included — so chunk heads and
-// relation endpoints in the DB reference exactly the token rows they mean.
+// Lowering: the front end's tree-shaped IR (BookAnalysis) flattened to the
+// backend's relational rows. Pure — no sqlite here: this maps the analysis
+// tree to flat, insertable records and is unit-tested on its own, so the
+// emitter (store.ts) only has to bind these rows to prepared statements.
+// Token indices are kept faithful to the analysis' own per-sentence token
+// array — punctuation included — so chunk heads and relation endpoints in
+// the DB reference exactly the token rows they mean.
 
-import type { Attribution, Sentence, Speaker } from "../../shared/lingua/analysis"
-import type { BookAnalysis, ChapterPlace, SentenceLocation } from "../../shared/lingua/book-analysis"
+import type { Attribution, Sentence, Speaker } from "../../shared/lingua/pipeline"
+import type { BookAnalysis, ChapterPlace, SentenceLocation } from "../../shared/lingua/driver"
 import type { Binding, GlyphSpan } from "../../shared/book/glyphs"
-import type { AnalyzedToken } from "../../shared/lingua/tag"
+import type { AnalyzedToken } from "../../shared/lingua/tagger"
 import type { Optional } from "../../shared/optional"
 
 export type CharacterRow = { slug: string; canonical: string }

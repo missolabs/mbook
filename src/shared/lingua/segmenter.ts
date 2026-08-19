@@ -1,5 +1,7 @@
-// Sentence segmentation over a token stream. A boundary falls after a terminal
-// mark (. ! ? …), with refinements the naive rule gets wrong:
+// The segmenter — statement splitting. Sentences are this compiler's
+// statements: every middle pass (tagger, parser, binder) runs per sentence,
+// and only the dataflow pass sees across them. A boundary falls after a
+// terminal mark (. ! ? …), with refinements the naive rule gets wrong:
 //   * an abbreviation dot is not terminal — a `.` right after a word in the
 //     dictionary's abbreviation list (`Sr`, `Dr`, `etc`) or after a bare
 //     initial (`F.` in `F. Scott`) keeps the sentence open;
@@ -13,7 +15,7 @@
 // last terminal are themselves a final sentence — a paragraph is always a
 // boundary and this module enforces nothing across paragraphs.
 
-import type { SourceToken } from "./tokenize"
+import type { SourceToken } from "./lexer"
 
 export type RawSentence = { tokens: readonly SourceToken[] }
 

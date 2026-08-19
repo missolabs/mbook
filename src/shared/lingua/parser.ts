@@ -1,8 +1,11 @@
-// Shallow chunker: a greedy longest-match of the dictionary's POS-sequence chunk
-// rules over one sentence's tagged tokens, yielding non-overlapping NP/VP/PP
-// chunks. Each chunk carries its half-open token range and the index of its head
-// token. The rules are the hand-authored SyntaxData.chunkRules (see
-// tools/lexicon/syntax/*.ts); this module is only their matcher.
+// The parser — a shallow phrase parser. The grammar is DATA: the dictionary
+// ships hand-authored EBNF-ish productions over POS categories
+// (SyntaxData.chunkRules — each pattern item a terminal with a `one`/`opt`/
+// `star` quantifier), and this module is only their matcher: a greedy
+// longest-match with backtracking quantifiers, run left-to-right over one
+// sentence's classified tokens, yielding non-overlapping NP/VP/PP phrases —
+// the parse IR the binder consumes. Each phrase carries its half-open token
+// range and the index of its head token.
 //
 // Token indices are positions in the sentence's own `tokens` array (the same
 // array glyph anchors and relations index into), so a chunk, a mention's covered
@@ -22,7 +25,7 @@
 //     `ADP PRON` pair); the preposition attaches to that head rather than being
 //     it.
 
-import type { AnalyzedToken } from "./tag"
+import type { AnalyzedToken } from "./tagger"
 import type { ChunkKind, ChunkRule, PatItem, Pos } from "./model"
 import type { Optional } from "../optional"
 
@@ -35,7 +38,7 @@ export type Chunk = {
 
 type Slot = { index: number; pos: Pos }
 
-export function chunkSentence(
+export function parsePhrases(
   tokens: readonly AnalyzedToken[],
   rules: readonly ChunkRule[],
 ): readonly Chunk[] {

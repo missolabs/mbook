@@ -1,7 +1,10 @@
-// Pure, language-aware tokenizer. Input is one span of already-sigil-stripped
-// display text; output is its tokens with half-open [from,to) offsets into that
-// same text. A token is a word, a number, or a single punctuation mark; runs of
-// whitespace separate tokens and are never emitted.
+// The lexer. A character stream in (one paragraph of preprocessed, visible
+// text), a token stream out — words, numbers and single punctuation marks,
+// each with half-open [from,to) offsets into the scanned text; whitespace
+// separates tokens and is never emitted. Like any lexer it is language-aware
+// only in its splitting rules, never in meaning: classification belongs to
+// the tagger, and the offsets it emits are the source positions every later
+// pass inherits.
 //
 // The one non-trivial job is clitic splitting, and it is language-specific
 // because the lexicons dropped the combined forms:
@@ -12,7 +15,7 @@
 //     dictionary (verified), while the stems (`do`, `is`, `it`) are. So a
 //     contraction splits Penn-Treebank style into stem + clitic (`do`+`n't`,
 //     `it`+`'s`); the stem hits the lexicon and the clitic is tagged from a
-//     closed table in tag.ts. A word whose post-apostrophe tail is not a clitic
+//     closed table in tagger.ts. A word whose post-apostrophe tail is not a clitic
 //     (`o'clock`, `O'Brien`) is left whole so the lexicon can tag it directly.
 //
 // Splitting is gated by a whole-form oracle: a HYPHENATED word the lexicon
@@ -38,9 +41,10 @@ export type Token = {
   to: number
 }
 
-// A token re-anchored by the analysis layer: `stripped` is its [from,to) in the
-// sigil-stripped text it was tokenized from, `source` its enclosing [from,to) in
-// the original paragraph text (the two differ wherever a hidden sigil was cut).
+// A token carried through the preprocessor's source map: `stripped` is its
+// [from,to) in the preprocessed text it was lexed from, `source` its enclosing
+// [from,to) in the original manuscript (the two differ wherever a hidden sigil
+// was cut).
 export type SourceToken = {
   kind: TokenKind
   text: string
@@ -48,7 +52,7 @@ export type SourceToken = {
   source: Span
 }
 
-export function tokenize(text: string, language: Language, keepWhole: WholeFormOracle): readonly Token[] {
+export function lex(text: string, language: Language, keepWhole: WholeFormOracle): readonly Token[] {
   const tokens: Token[] = []
 
   let index = 0
@@ -198,7 +202,6 @@ function splitWord(
       return
   }
 }
-
 
 // pt clitics and compounds alike: emit each hyphen-separated run as its own word
 // token, dropping the hyphens. Mesoclisis (`dar-te-ei`) falls out for free.

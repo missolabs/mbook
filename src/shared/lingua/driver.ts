@@ -1,9 +1,12 @@
-// Book-level composition: the whole book's source text in, a complete linguistic
-// analysis out. This is the pure pipeline that stitches the book domain
-// (parse -> cast -> glyphs -> language) to the paragraph analyzer, running the
-// analyzer once per paragraph block and collecting every result. It is the seam
-// the main-process store persists and the one place paragraph coordinates are
-// derived, so it stays pure and is unit-tested against the real dictionaries.
+// The driver. A book is the program, its paragraphs the translation units:
+// the driver parses the book's own surface (markdown blocks, frontmatter,
+// cast, glyphs), selects the target dictionary from the declared language,
+// runs the front-end pipeline once per paragraph, and collects every unit's
+// IR plus its debug info — chapter, line and column for each sentence, the
+// coordinates every downstream fact points back to. Unresolved character
+// names surface here as the compilation's diagnostics. It is the seam the
+// main-process backend persists, so it stays pure and is unit-tested against
+// the real dictionaries.
 //
 // Coordinates: scanGlyphs lifts each line's spans to doc-absolute offsets by
 // advancing one character per joining newline. A paragraph's text is therefore
@@ -22,8 +25,8 @@ import type { Block } from "../book/parse"
 import type { Optional } from "../optional"
 import { err, ok } from "../result"
 import type { Result } from "../result"
-import { analyzeParagraph } from "./analysis"
-import type { ParagraphAnalysis } from "./analysis"
+import { analyzeParagraph } from "./pipeline"
+import type { ParagraphAnalysis } from "./pipeline"
 import { readLanguage } from "./language"
 import type { Language } from "./language"
 import type { Lexicon } from "./lexicon"

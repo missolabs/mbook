@@ -7,9 +7,9 @@ import type { Lexicon } from "../../src/shared/lingua/lexicon"
 import { dictId } from "../../src/shared/lingua/language"
 import type { Language, DictId } from "../../src/shared/lingua/language"
 import type { Optional } from "../../src/shared/optional"
-import { analyzeBook } from "../../src/shared/lingua/book-analysis"
-import type { BookAnalysis, LexiconSource } from "../../src/shared/lingua/book-analysis"
-import { analysisToRows } from "../../src/main/lingua/rows"
+import { analyzeBook } from "../../src/shared/lingua/driver"
+import type { BookAnalysis, LexiconSource } from "../../src/shared/lingua/driver"
+import { analysisToRows } from "../../src/main/lingua/lower"
 
 const DICT_DIR = join(import.meta.dir, "../../resources/dictionaries")
 
