@@ -21,7 +21,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 480,
     show: false,
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 20, y: 20 },
+    trafficLightPosition: { x: 20, y: 16 },
     vibrancy: "under-window",
     visualEffectState: "active",
     backgroundColor: "#00000000",

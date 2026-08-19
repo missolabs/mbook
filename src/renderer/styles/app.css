@@ -74,8 +74,10 @@
 }
 
 .mb-nav-toggle {
-  /* After the traffic lights (x:20, ~52px wide), on the rail's own side. */
-  left: 84px;
+  /* Tight after the traffic lights (x:20, ~54px wide) — the leftmost sane
+     seat; the lights themselves are y-centred to the titlebar in window.ts so
+     both rows share one optical centre. */
+  left: 76px;
 }
 
 /* min-height:0 lets the 1fr track shrink to the viewport so the editor's own
@@ -132,12 +134,15 @@
   padding-bottom: 16px;
 }
 
+/* One 16px content axis for the whole rail: section text (14px + the 2px
+   current-edge), the card grid, and the statusbar's left cell all start on
+   the same line. */
 .mb-nav-sect {
   font: 500 10px var(--m-font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--m-mist);
-  padding: 18px 20px 8px 18px;
+  padding: 18px 16px 8px 14px;
   border-left: 2px solid transparent;
   white-space: nowrap;
   overflow: hidden;
@@ -160,7 +165,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 10px 12px;
-  padding: 2px 20px 4px;
+  padding: 2px 16px 6px;
 }
 
 .mb-nav-card canvas {
@@ -193,7 +198,7 @@
    left cell sits on the sidebar's text axis. */
 .mb-statusbar {
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 16px;
 }
 
 /* Translucency override — after the imports and UN-LAYERED, so it beats the
