@@ -17,6 +17,8 @@ import { Statusbar } from "./statusbar"
 import type { StatusState } from "./statusbar"
 import { Titlebar } from "./titlebar"
 import { Navigator } from "./navigator"
+import { CommandPalette } from "./command/palette"
+import type { Command } from "./command/filter"
 import { DocSession } from "./doc-session"
 import { PageTracker } from "./page-tracker"
 import { createEditor, programmatic } from "./editor/editor"
@@ -522,6 +524,102 @@ switch (app) {
       tracker.recompute(readLines(view))
 
       renderDerived()
+    })
+
+    // ── The command bar ────────────────────────────────────────────────────
+    // Commands are built fresh on every open from the live seams this root
+    // already owns — chapters from the tracker's snapshot, view toggles, the
+    // session's file actions — and the recent books join asynchronously the
+    // moment the ledger answers.
+    const palette = new CommandPalette({
+      host: document.body,
+      onClose: () => view.focus(),
+    })
+
+    const bookName = (path: string): string => {
+      const leaf = path.split("/").at(-1)
+
+      switch (leaf === undefined) {
+        case true:
+          return path
+        case false:
+          return leaf!.replace(/\.md$/, "")
+      }
+    }
+
+    const paletteCommands = (): Command[] => {
+      const snapshot = tracker.snapshot()
+      const chapters = chapterList(snapshot.doc)
+
+      const navigation: Command[] = [
+        { id: "nav-rosto", group: "navegação", title: "Página de rosto", hint: "", run: () => navigate(0) },
+        ...chapters.map((chapter, index) => ({
+          id: `nav-cap-${index}`,
+          group: "navegação",
+          title: `Capítulo ${index + 1} · ${chapter.title}`,
+          hint: "",
+          run: () => navigate(chapter.line),
+        })),
+      ]
+
+      const display: Command[] = [
+        { id: "view-nav", group: "exibição", title: "Alternar navegador", hint: "⌘\\", run: toggleNavigator },
+        { id: "view-zoom-in", group: "exibição", title: "Ampliar página", hint: "⌘+", run: () => stepZoom(1) },
+        { id: "view-zoom-out", group: "exibição", title: "Reduzir página", hint: "⌘−", run: () => stepZoom(-1) },
+        { id: "view-zoom-reset", group: "exibição", title: "Zoom 100%", hint: "⌘0", run: () => applyZoom(1) },
+      ]
+
+      const book: Command[] = [
+        { id: "book-new", group: "livro", title: "Novo livro", hint: "", run: () => void session.onMenu("new") },
+        { id: "book-open", group: "livro", title: "Abrir…", hint: "", run: () => void session.onMenu("open") },
+        { id: "book-save", group: "livro", title: "Guardar", hint: "", run: () => void session.onMenu("save") },
+        { id: "book-save-as", group: "livro", title: "Guardar como…", hint: "", run: () => void session.onMenu("save-as") },
+      ]
+
+      return [...navigation, ...display, ...book]
+    }
+
+    const openPalette = () => {
+      palette.open(paletteCommands())
+
+      void window.mbook["book:recent"]({}).then((result) => {
+        switch (result.ok) {
+          case false:
+            return
+          case true:
+            break
+        }
+
+        palette.extend(
+          result.value.entries.map((entry) => ({
+            id: `recent-${entry.path}`,
+            group: "recentes",
+            title: bookName(entry.path),
+            hint: "",
+            run: () => void session.openPathDoc(entry.path),
+          })),
+        )
+      })
+    }
+
+    window.addEventListener("keydown", (event) => {
+      switch (event.metaKey && event.key === "k") {
+        case false:
+          return
+        case true:
+          break
+      }
+
+      event.preventDefault()
+
+      switch (palette.isOpen()) {
+        case true:
+          palette.close()
+          return
+        case false:
+          openPalette()
+          return
+      }
     })
   }
 }

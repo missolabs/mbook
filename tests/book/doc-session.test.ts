@@ -99,6 +99,27 @@ describe("DocSession", () => {
     expect(lastFile(rec)).toEqual({ kind: "named", name: "dune.md", dirty: false })
   })
 
+  it("opens a known path directly and flushes pending work first — the command bar's recents", async () => {
+    const { session, rec } = makeSession({
+      bootstrap: {
+        ok: true,
+        value: { kind: "restored", path: "/books/dune.md", content: "body" },
+      },
+      saveAs: { ok: true, value: { kind: "cancelled" } },
+    })
+
+    await session.boot()
+
+    session.onDocChanged()
+
+    await session.openPathDoc("/books/poco.md")
+
+    // The dirty dune buffer was preserved by a save before the switch, and the
+    // requested path is now the clean open document.
+    expect(rec.saves.map((s) => s.path)).toEqual(["/books/dune.md"])
+    expect(lastFile(rec)).toEqual({ kind: "named", name: "poco.md", dirty: false })
+  })
+
   it("marks dirty on edit, then autosaves an on-disk file back to clean", async () => {
     const { session, rec, setContent } = makeSession({
       bootstrap: {

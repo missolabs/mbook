@@ -127,5 +127,6 @@ live in the status bar as you write.
 
 | Keys | |
 | --- | --- |
+| `⌘K` | the command bar — jump to any chapter, toggle the rail, zoom, open recent books |
 | `⌘\` | toggle the navigator rail (chapters + page thumbnails; drag its edge to resize) |
 | `⌘+` / `⌘-` / `⌘0` | zoom the page 50–200% without reflowing a single line |

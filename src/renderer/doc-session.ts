@@ -82,6 +82,23 @@ export class DocSession {
     await this.saveIfPossible()
   }
 
+  // Open a known path directly — the command bar's recents. Same discipline as
+  // the dialog path: pending work is preserved before the switch, and the main
+  // process records the path into the recent ledger.
+  async openPathDoc(path: string): Promise<void> {
+    await this.preserveBeforeSwitch()
+
+    const result = await this.deps.bridge["book:open-path"]({ path })
+
+    switch (result.ok) {
+      case false:
+        return
+      case true:
+        this.loadDisk(result.value.path, result.value.content)
+        return
+    }
+  }
+
   async onMenu(action: MenuAction): Promise<void> {
     switch (action) {
       case "new":
