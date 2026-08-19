@@ -63,7 +63,7 @@
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 5px;
+  border-radius: 0;
   background: transparent;
   color: var(--m-mist);
 }
@@ -186,11 +186,13 @@
   outline-offset: -2px;
 }
 
+/* Left-aligned like everything else in the rail — the folio label sits on its
+   card's left edge, not floating at a centre. */
 .mb-nav-num {
-  text-align: center;
+  text-align: left;
   font: 500 9px var(--m-font-mono);
   color: var(--m-mist);
-  padding-top: 4px;
+  padding: 4px 0 0 1px;
 }
 
 /* The statusbar borrows mdesign's .m-statusbar surface and voice; this pushes
