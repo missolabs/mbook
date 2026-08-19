@@ -25,6 +25,9 @@ export const PT_BR_SYNTAX: SyntaxData = {
       "comigo", "contigo", "consigo", "conosco", "convosco", "que", "quem",
       "cujo", "cuja", "cujos", "cujas", "isto", "isso", "aquilo", "algo",
       "alguém", "ninguém", "tudo", "nada",
+      // The enclitic allomorphs the hyphen split produces (`vê-lo` -> vê + lo);
+      // `no`/`na` stay out — they collide with the em+o contractions.
+      "lo", "la", "los", "las",
     ],
     prepositions: [
       "a", "ante", "após", "até", "com", "contra", "de", "desde", "em",
@@ -44,7 +47,8 @@ export const PT_BR_SYNTAX: SyntaxData = {
     // pass abstain and the context rules decide (`assim que` vs `assim mesmo`).
     adverbs: [
       "aqui", "aí", "ali", "cá", "lá", "acolá", "assim", "já", "ainda",
-      "agora", "sempre", "nunca", "também", "não",
+      "agora", "sempre", "nunca", "também", "não", "só", "apenas", "quase",
+      "talvez", "hoje", "ontem", "amanhã",
     ],
     abbreviations: [
       "Sr", "Sra", "Srta", "Dr", "Dra", "Prof", "Profa", "Exmo", "Exma", "etc",
@@ -90,30 +94,116 @@ export const PT_BR_SYNTAX: SyntaxData = {
     { suffix: "indo", pos: "VERB" },
     { suffix: "ou", pos: "VERB" },
   ],
+  // Curated with a bias the tagger depends on: a valency hint also promotes a
+  // sentence-initial finite reading over a noun homograph (pro-drop Portuguese
+  // opens clauses on the verb), so verbs whose finite forms collide with
+  // frequent nouns (sonhar/sonho, jantar, casar/casa) are deliberately absent.
   valency: [
     { lemma: "ser", frame: "copular" },
     { lemma: "estar", frame: "copular" },
     { lemma: "ficar", frame: "copular" },
     { lemma: "parecer", frame: "copular" },
+    { lemma: "permanecer", frame: "copular" },
+    { lemma: "virar", frame: "copular" },
     { lemma: "ir", frame: "intransitive" },
-    { lemma: "vir", frame: "intransitive" },
-    { lemma: "chegar", frame: "intransitive" },
     { lemma: "dormir", frame: "intransitive" },
+    { lemma: "morrer", frame: "intransitive" },
+    { lemma: "nascer", frame: "intransitive" },
+    { lemma: "cair", frame: "intransitive" },
+    { lemma: "correr", frame: "intransitive" },
+    { lemma: "andar", frame: "intransitive" },
+    { lemma: "caminhar", frame: "intransitive" },
+    { lemma: "voltar", frame: "intransitive" },
+    { lemma: "sair", frame: "intransitive" },
+    { lemma: "entrar", frame: "intransitive" },
+    { lemma: "subir", frame: "intransitive" },
+    { lemma: "descer", frame: "intransitive" },
+    { lemma: "desaparecer", frame: "intransitive" },
+    { lemma: "sumir", frame: "intransitive" },
+    { lemma: "sorrir", frame: "intransitive" },
+    { lemma: "chorar", frame: "intransitive" },
+    { lemma: "gritar", frame: "intransitive" },
+    { lemma: "tremer", frame: "intransitive" },
+    { lemma: "respirar", frame: "intransitive" },
+    { lemma: "nadar", frame: "intransitive" },
+    { lemma: "acordar", frame: "intransitive" },
+    { lemma: "envelhecer", frame: "intransitive" },
     { lemma: "dar", frame: "ditransitive" },
     { lemma: "dizer", frame: "ditransitive" },
     { lemma: "entregar", frame: "ditransitive" },
     { lemma: "enviar", frame: "ditransitive" },
+    { lemma: "trazer", frame: "ditransitive" },
+    { lemma: "oferecer", frame: "ditransitive" },
+    { lemma: "mostrar", frame: "ditransitive" },
+    { lemma: "emprestar", frame: "ditransitive" },
+    { lemma: "devolver", frame: "ditransitive" },
+    { lemma: "contar", frame: "ditransitive" },
+    { lemma: "prometer", frame: "ditransitive" },
+    { lemma: "perguntar", frame: "ditransitive" },
     { lemma: "ver", frame: "transitive" },
     { lemma: "fazer", frame: "transitive" },
     { lemma: "ter", frame: "transitive" },
     { lemma: "comer", frame: "transitive" },
     { lemma: "querer", frame: "transitive" },
+    { lemma: "saber", frame: "transitive" },
+    { lemma: "olhar", frame: "transitive" },
+    { lemma: "ouvir", frame: "transitive" },
+    { lemma: "escutar", frame: "transitive" },
+    { lemma: "sentir", frame: "transitive" },
+    { lemma: "encontrar", frame: "transitive" },
+    { lemma: "achar", frame: "transitive" },
+    { lemma: "perder", frame: "transitive" },
+    { lemma: "amar", frame: "transitive" },
+    { lemma: "odiar", frame: "transitive" },
+    { lemma: "esperar", frame: "transitive" },
+    { lemma: "buscar", frame: "transitive" },
+    { lemma: "procurar", frame: "transitive" },
+    { lemma: "deixar", frame: "transitive" },
+    { lemma: "levar", frame: "transitive" },
+    { lemma: "pegar", frame: "transitive" },
+    { lemma: "beber", frame: "transitive" },
+    { lemma: "tomar", frame: "transitive" },
+    { lemma: "esquecer", frame: "transitive" },
+    { lemma: "notar", frame: "transitive" },
+    { lemma: "perceber", frame: "transitive" },
+    { lemma: "compreender", frame: "transitive" },
+    { lemma: "entender", frame: "transitive" },
+    { lemma: "imaginar", frame: "transitive" },
+    { lemma: "observar", frame: "transitive" },
+    { lemma: "abraçar", frame: "transitive" },
+    { lemma: "beijar", frame: "transitive" },
+    { lemma: "matar", frame: "transitive" },
+    { lemma: "temer", frame: "transitive" },
+    { lemma: "chamar", frame: "transitive" },
+    { lemma: "conhecer", frame: "transitive" },
+    { lemma: "receber", frame: "transitive" },
+    { lemma: "abrir", frame: "transitive" },
+    { lemma: "fechar", frame: "transitive" },
+    { lemma: "escrever", frame: "transitive" },
+    { lemma: "ler", frame: "transitive" },
+    { lemma: "segurar", frame: "transitive" },
+    { lemma: "repetir", frame: "transitive" },
+    { lemma: "murmurar", frame: "transitive" },
+    { lemma: "sussurrar", frame: "transitive" },
+    { lemma: "atravessar", frame: "transitive" },
+    { lemma: "vestir", frame: "transitive" },
+    { lemma: "carregar", frame: "transitive" },
+    { lemma: "acender", frame: "transitive" },
+    { lemma: "apagar", frame: "transitive" },
+    { lemma: "guardar", frame: "transitive" },
     { lemma: "gostar", frame: "prepositional" },
     { lemma: "precisar", frame: "prepositional" },
     { lemma: "depender", frame: "prepositional" },
     { lemma: "morar", frame: "prepositional" },
+    { lemma: "pensar", frame: "prepositional" },
+    { lemma: "acreditar", frame: "prepositional" },
+    { lemma: "lembrar", frame: "prepositional" },
+    { lemma: "duvidar", frame: "prepositional" },
+    { lemma: "confiar", frame: "prepositional" },
     // Unaccusative/existential verbs: their sole argument surfaces AFTER the
     // verb and is a subject, never an object ("Aqui só existe o vento").
+    // `chegar`/`vir`/`aparecer` join them for the inverted arrivals literary
+    // prose leans on ("Chegou o inverno", "Veio a noite").
     { lemma: "existir", frame: "presentational" },
     { lemma: "haver", frame: "presentational" },
     { lemma: "faltar", frame: "presentational" },
@@ -121,15 +211,31 @@ export const PT_BR_SYNTAX: SyntaxData = {
     { lemma: "acontecer", frame: "presentational" },
     { lemma: "surgir", frame: "presentational" },
     { lemma: "restar", frame: "presentational" },
+    { lemma: "aparecer", frame: "presentational" },
+    { lemma: "bastar", frame: "presentational" },
+    { lemma: "chegar", frame: "presentational" },
+    { lemma: "vir", frame: "presentational" },
   ],
   // `se` also introduces complements ("vim ver se..."), but it is ambiguous
   // with the reflexive clitic, so only the unambiguous `que` is declared.
   complementizers: ["que"],
+  relativePronouns: ["que", "quem"],
+  // `estar` + particípio is stative-passive ("estava coberto de neve") and
+  // takes the same agent PP when one appears, so it rides along with `ser`.
+  // `ir` is here for the homograph, not the grammar: `foi/fora/fosse` resolve
+  // to EITHER lemma and the tagger may pick `ir` — before a participle the
+  // surface is the ser-passive regardless of which lemma won.
+  passiveAuxiliaries: ["ser", "estar", "ir"],
+  agentMarkers: ["por", "pelo", "pela", "pelos", "pelas"],
+  // Portuguese existentials need no dummy subject (pro-drop) — the inversion
+  // is licensed by the presentational frame instead, so no expletives exist.
+  expletives: [],
   // DELAF tense letters: P/I/J/F/Q presente..mais-que-perfeito, C condicional,
-  // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal). G gerúndio
-  // and K particípio are neither finite nor infinitive and stay unlisted.
+  // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio.
+  // G gerúndio is none of the three classes and stays unlisted.
   verbFeats: {
     finitePrefixes: ["P", "I", "J", "F", "Q", "C", "S", "T", "U", "Y"],
     infinitivePrefixes: ["W"],
+    participlePrefixes: ["K"],
   },
 }

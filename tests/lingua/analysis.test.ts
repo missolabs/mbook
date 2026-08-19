@@ -164,10 +164,17 @@ describe("en: contraction splitting (Penn convention)", () => {
     expect(nt.provenance).toBe("closed-class")
   })
 
-  it("splits `it's` into pronoun + auxiliary clitic", () => {
+  it("splits `it's` and reads the `'s` before a noun as the possessive marker", () => {
     expect(byText(analysis, "it").pos).toBe("PRON")
 
     const s = byText(analysis, "'s")
+    expect(s.pos).toBe("PART")
+    expect(s.feat).toBe("Poss")
+  })
+
+  it("keeps the auxiliary reading when `'s` precedes anything non-nominal", () => {
+    const s = byText(analyze("It's gone.", EN, { kind: "en-UK" }), "'s")
+
     expect(s.pos).toBe("AUX")
     expect(s.lemma).toBe("be")
   })

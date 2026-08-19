@@ -88,7 +88,56 @@ export function tagSentence(input: TagInput): readonly AnalyzedToken[] {
     }
   }
 
+  retagPossessives(out)
+
   return out
+}
+
+// The English clitic table reads every `'s` as the auxiliary (the honest
+// left-to-right choice), but once the whole sentence is tagged a `'s` sitting
+// directly before a nominal is the possessive marker (`the cat's tail`), not
+// `is`. A `'s` before anything else (`it's grey`, `she's leaving`) keeps the
+// auxiliary reading.
+function retagPossessives(out: AnalyzedToken[]): void {
+  for (let i = 0; i < out.length - 1; i++) {
+    const current = out[i]!
+
+    switch (current.role) {
+      case "punctuation":
+        continue
+      case "content":
+        break
+    }
+
+    const norm = current.tagged.token.text.replace(/’/g, "'").toLowerCase()
+
+    switch (current.tagged.pos === "AUX" && norm === "'s" && isNominal(out[i + 1]!)) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    out[i] = {
+      role: "content",
+      tagged: {
+        token: current.tagged.token,
+        lemma: "'s",
+        pos: "PART",
+        feat: "Poss",
+        provenance: "closed-class",
+      },
+    }
+  }
+}
+
+function isNominal(token: AnalyzedToken): boolean {
+  switch (token.role) {
+    case "punctuation":
+      return false
+    case "content":
+      return token.tagged.pos === "NOUN" || token.tagged.pos === "PROPN"
+  }
 }
 
 function tagWord(
@@ -209,7 +258,7 @@ function entryTag(token: SourceToken, entry: Entry, provenance: Provenance): Tag
   return { token, lemma: entry.lemma, pos: entry.pos, feat: entry.feat, provenance }
 }
 
-type FormClass = "any" | "finite" | "infinitive"
+type FormClass = "any" | "finite" | "infinitive" | "participle"
 
 type ContextRule = {
   prev: Pos
@@ -225,11 +274,14 @@ type ContextRule = {
 // era` -> ser, while `the kitchen sink` stays a noun because base-form `sink`
 // is not finite); a verb or auxiliary chains onto an INFINITIVE (`veio ver`),
 // which never flips a bare-object noun since those readings are not
-// infinitive-marked. Failing the infinitive chain, a post-verbal word with an
-// ADV reading is adverbial (`comeu assim`, `existe mesmo`) — a real bare-noun
-// object (`comeu peixe`) has no ADV reading and never reaches the rule — and
-// an adverb chains a following ADV-capable word into the locution
-// (`assim mesmo`, `mesmo aí`).
+// infinitive-marked, and failing that onto a PARTICIPLE — the passive and
+// perfect periphrases (`foi comido`, `tinha visto`, `was eaten`, `had seen`).
+// Failing both chains, a post-verbal word with an ADV reading is adverbial
+// (`comeu assim`, `existe mesmo`) — a real bare-noun object (`comeu peixe`)
+// has no ADV reading and never reaches the rule — and an adverb chains a
+// following ADV-capable word into the locution (`assim mesmo`, `mesmo aí`),
+// or failing that reveals a negated/adverb-fronted verb (`não sabia`,
+// `did not see` — `see` would otherwise fall to its noun reading).
 const CONTEXT_RULES: readonly ContextRule[] = [
   { prev: "DET", prefer: "NOUN", form: "any" },
   { prev: "ADP", prefer: "NOUN", form: "any" },
@@ -237,15 +289,18 @@ const CONTEXT_RULES: readonly ContextRule[] = [
   { prev: "NOUN", prefer: "VERB", form: "finite" },
   { prev: "PROPN", prefer: "VERB", form: "finite" },
   { prev: "VERB", prefer: "VERB", form: "infinitive" },
-  { prev: "VERB", prefer: "ADV", form: "any" },
   { prev: "AUX", prefer: "VERB", form: "infinitive" },
+  { prev: "VERB", prefer: "VERB", form: "participle" },
+  { prev: "AUX", prefer: "VERB", form: "participle" },
+  { prev: "VERB", prefer: "ADV", form: "any" },
   { prev: "ADV", prefer: "ADV", form: "any" },
+  { prev: "ADV", prefer: "VERB", form: "any" },
 ]
 
 function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: SyntaxData): Entry {
   switch (prev.kind) {
     case "none":
-      return priorityPick(candidates)
+      return priorityPick(candidates, syntax)
     case "pos":
       break
   }
@@ -270,7 +325,7 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
     }
   }
 
-  return priorityPick(candidates)
+  return priorityPick(candidates, syntax)
 }
 
 function formMatches(form: FormClass, feat: string, marks: VerbFeatMarks): boolean {
@@ -281,6 +336,8 @@ function formMatches(form: FormClass, feat: string, marks: VerbFeatMarks): boole
       return hasPrefix(feat, marks.finitePrefixes)
     case "infinitive":
       return hasPrefix(feat, marks.infinitivePrefixes)
+    case "participle":
+      return hasPrefix(feat, marks.participlePrefixes)
   }
 }
 
@@ -319,7 +376,26 @@ const PRIORITY: readonly Pos[] = [
   "X",
 ]
 
-function priorityPick(candidates: readonly Entry[]): Entry {
+// With no usable left context, a FINITE verb reading whose lemma the valency
+// data curates beats the noun-first priority: pro-drop Portuguese opens
+// clauses on the verb (`Olho para o mar`) and English fronts its copula in
+// questions (`Was it a dream?`). The hint gate keeps this surgical — an
+// uncurated homograph (`Casa é boa`) still reads as the noun.
+function priorityPick(candidates: readonly Entry[], syntax: SyntaxData): Entry {
+  const hinted = candidates.filter(
+    (e) =>
+      e.pos === "VERB" &&
+      hasPrefix(e.feat, syntax.verbFeats.finitePrefixes) &&
+      syntax.valency.some((v) => v.lemma === e.lemma),
+  )
+
+  switch (hinted.length > 0) {
+    case true:
+      return lemmaPick(hinted, syntax.valency)
+    case false:
+      break
+  }
+
   let best = candidates[0]!
   let bestRank = PRIORITY.indexOf(best.pos)
 

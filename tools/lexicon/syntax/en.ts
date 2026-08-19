@@ -44,6 +44,7 @@ export const EN_SYNTAX: SyntaxData = {
     // `there` matters most (the existential expletive must not read as a noun).
     adverbs: [
       "here", "there", "now", "then", "always", "never", "again",
+      "perhaps", "maybe", "often", "already", "soon",
     ],
     abbreviations: [
       "Mr", "Mrs", "Ms", "Dr", "Prof", "Sr", "Jr", "St", "Ave", "Rd", "Blvd",
@@ -91,37 +92,109 @@ export const EN_SYNTAX: SyntaxData = {
     { suffix: "ward", pos: "ADV" },
     { suffix: "wise", pos: "ADV" },
   ],
+  // Curated with a bias the tagger depends on: a valency hint also promotes a
+  // sentence-initial finite reading over a noun homograph, so verbs whose
+  // marked forms are frequent bare nouns (smiles, whispers, screams, dreams,
+  // sounds, falls-of-water, walks, plays) are deliberately absent — English
+  // opens far more sentences on nouns than on verbs.
   valency: [
     { lemma: "be", frame: "copular" },
     { lemma: "become", frame: "copular" },
     { lemma: "seem", frame: "copular" },
     { lemma: "appear", frame: "copular" },
     { lemma: "look", frame: "copular" },
+    { lemma: "stay", frame: "copular" },
     { lemma: "go", frame: "intransitive" },
-    { lemma: "come", frame: "intransitive" },
+    // In prose `do` is overwhelmingly the auxiliary (`Did you see...`), and
+    // marking it object-taking would read the inverted subject as its object;
+    // the main-verb use (`did the dishes`) is sacrificed knowingly.
+    { lemma: "do", frame: "intransitive" },
     { lemma: "arrive", frame: "intransitive" },
     { lemma: "sleep", frame: "intransitive" },
+    { lemma: "die", frame: "intransitive" },
+    { lemma: "fall", frame: "intransitive" },
+    { lemma: "run", frame: "intransitive" },
+    { lemma: "swim", frame: "intransitive" },
+    { lemma: "sit", frame: "intransitive" },
+    { lemma: "vanish", frame: "intransitive" },
+    { lemma: "disappear", frame: "intransitive" },
+    { lemma: "tremble", frame: "intransitive" },
+    { lemma: "weep", frame: "intransitive" },
+    { lemma: "return", frame: "intransitive" },
     { lemma: "give", frame: "ditransitive" },
     { lemma: "tell", frame: "ditransitive" },
     { lemma: "send", frame: "ditransitive" },
     { lemma: "show", frame: "ditransitive" },
+    { lemma: "bring", frame: "ditransitive" },
+    { lemma: "offer", frame: "ditransitive" },
+    { lemma: "lend", frame: "ditransitive" },
     { lemma: "make", frame: "transitive" },
     { lemma: "take", frame: "transitive" },
     { lemma: "see", frame: "transitive" },
     { lemma: "want", frame: "transitive" },
     { lemma: "put", frame: "transitive" },
+    { lemma: "know", frame: "transitive" },
+    { lemma: "believe", frame: "transitive" },
+    { lemma: "say", frame: "transitive" },
+    { lemma: "ask", frame: "transitive" },
+    { lemma: "answer", frame: "transitive" },
+    { lemma: "write", frame: "transitive" },
+    { lemma: "read", frame: "transitive" },
+    { lemma: "open", frame: "transitive" },
+    { lemma: "close", frame: "transitive" },
+    { lemma: "hear", frame: "transitive" },
+    { lemma: "feel", frame: "transitive" },
+    { lemma: "find", frame: "transitive" },
+    { lemma: "lose", frame: "transitive" },
+    { lemma: "love", frame: "transitive" },
+    { lemma: "hate", frame: "transitive" },
+    { lemma: "watch", frame: "transitive" },
+    { lemma: "remember", frame: "transitive" },
+    { lemma: "forget", frame: "transitive" },
+    { lemma: "understand", frame: "transitive" },
+    { lemma: "realize", frame: "transitive" },
+    { lemma: "imagine", frame: "transitive" },
+    { lemma: "notice", frame: "transitive" },
+    { lemma: "observe", frame: "transitive" },
+    { lemma: "carry", frame: "transitive" },
+    { lemma: "hold", frame: "transitive" },
+    { lemma: "drink", frame: "transitive" },
+    { lemma: "eat", frame: "transitive" },
+    { lemma: "kill", frame: "transitive" },
+    { lemma: "fear", frame: "transitive" },
+    { lemma: "meet", frame: "transitive" },
+    { lemma: "call", frame: "transitive" },
+    { lemma: "receive", frame: "transitive" },
+    { lemma: "wear", frame: "transitive" },
+    { lemma: "cross", frame: "transitive" },
+    { lemma: "climb", frame: "transitive" },
+    { lemma: "catch", frame: "transitive" },
+    { lemma: "follow", frame: "transitive" },
+    { lemma: "reach", frame: "transitive" },
     { lemma: "rely", frame: "prepositional" },
     { lemma: "depend", frame: "prepositional" },
     { lemma: "consist", frame: "prepositional" },
     { lemma: "belong", frame: "prepositional" },
+    { lemma: "think", frame: "prepositional" },
+    { lemma: "wait", frame: "prepositional" },
+    { lemma: "listen", frame: "prepositional" },
     // English postverbal subjects need the expletive (`there exists / there
     // remained`), so only verbs attested in that frame are marked; `arrive`
     // and kin stay intransitive because "There arrived a stranger" is archaic
-    // and the plain SVO reading is the honest default.
+    // and the plain SVO reading is the honest default. `come` is the
+    // exception literary narration still licenses bare ("Then came the
+    // winter").
     { lemma: "exist", frame: "presentational" },
     { lemma: "remain", frame: "presentational" },
+    { lemma: "come", frame: "presentational" },
   ],
   complementizers: ["that"],
+  // `that` never chunks as a bare-pronoun NP here (DET outranks PRON for it),
+  // so only the human relatives need declaring.
+  relativePronouns: ["who", "whom", "which"],
+  passiveAuxiliaries: ["be"],
+  agentMarkers: ["by"],
+  expletives: ["there"],
   // AGID/Moby codes: PAST, 3SG and FIN are finite ("PAST" also prefixes
   // PASTPART — an accepted over-match, since a participle-only homograph with a
   // noun reading is vanishingly rare). The English infinitive is the bare base
@@ -130,5 +203,6 @@ export const EN_SYNTAX: SyntaxData = {
   verbFeats: {
     finitePrefixes: ["PAST", "3SG", "FIN"],
     infinitivePrefixes: [],
+    participlePrefixes: ["PASTPART"],
   },
 }

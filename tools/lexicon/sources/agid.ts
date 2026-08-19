@@ -5,7 +5,9 @@
 //   separated; an alternative may carry ` {gloss}`, a level digit, or trailing
 //   `? ! < >` annotations, all stripped.
 // Slot meaning by POS: NOUN -> plural; VERB(4 slots) -> past/pastpart/prog/3sg;
-// VERB(other) -> generic finite; ADJ -> comparative/superlative.
+// VERB(3 slots) -> merged past+pastpart/prog/3sg (AGID collapses the two when
+// they share a surface — the regular `-ed` case — so that slot emits BOTH
+// feats); VERB(other) -> generic finite; ADJ -> comparative/superlative.
 
 import type { LexEntry, Pos } from "../format/model"
 
@@ -40,28 +42,34 @@ function cleanForm(alt: string): string {
   }
 }
 
-function slotFeats(kind: "noun" | "verb" | "adj", slotCount: number): string[] {
+function slotFeats(kind: "noun" | "verb" | "adj", slotCount: number): string[][] {
   switch (kind) {
     case "noun":
-      return new Array(slotCount).fill("PL")
+      return new Array(slotCount).fill(["PL"])
     case "adj": {
-      const labels = ["COMP", "SUP"]
-      return new Array(slotCount).fill("").map((_, i) => {
+      const labels = [["COMP"], ["SUP"]]
+      return new Array(slotCount).fill([]).map((_, i) => {
         const l = labels[i]
         switch (l === undefined) {
           case true:
-            return "COMP"
+            return ["COMP"]
           case false:
             return l!
         }
       })
     }
     case "verb":
-      switch (slotCount === 4) {
-        case true:
-          return ["PAST", "PASTPART", "PROG", "3SG"]
-        case false:
-          return new Array(slotCount).fill("FIN")
+      switch (slotCount) {
+        case 4:
+          return [["PAST"], ["PASTPART"], ["PROG"], ["3SG"]]
+        case 3:
+          return [["PAST", "PASTPART"], ["PROG"], ["3SG"]]
+        case 8:
+          // The one 8-slot verb in AGID is `be`:
+          // was | were | been | being | am | are | is | are.
+          return [["PAST"], ["PAST"], ["PASTPART"], ["PROG"], ["FIN"], ["FIN"], ["3SG"], ["FIN"]]
+        default:
+          return new Array(slotCount).fill(["FIN"])
       }
   }
 }
@@ -100,14 +108,15 @@ function parseLine(line: string): LexEntry[] {
   const feats = slotFeats(type.kind, slots.length)
 
   slots.forEach((slot, si) => {
-    const feat = feats[si]!
     for (const alt of slot.split(", ")) {
       const form = cleanForm(alt)
       switch (form.length === 0) {
         case true:
           break
         case false:
-          out.push({ form, lemma, pos: type.pos, feat, variant: "both" })
+          for (const feat of feats[si]!) {
+            out.push({ form, lemma, pos: type.pos, feat, variant: "both" })
+          }
       }
     }
   })

@@ -48,6 +48,7 @@ function findEntry(entries: Entry[], pos: string, feat: string): Entry {
 
 const AGID_FIXTURE = [
   "run V: ran | run | running | runs",
+  "walk V: walked | walking | walks",
   "mouse N: mice",
   "colour N: colours",
   "color N: colors",
@@ -82,6 +83,15 @@ describe("English lexicon round-trip", () => {
 
     const biggest = findEntry(h.lookup("biggest"), "ADJ", "SUP")
     expect(biggest.lemma).toBe("big")
+  })
+
+  it("emits BOTH past and participle for AGID's merged regular -ed slot", () => {
+    expect(findEntry(h.lookup("walked"), "VERB", "PAST").lemma).toBe("walk")
+    expect(findEntry(h.lookup("walked"), "VERB", "PASTPART").lemma).toBe("walk")
+
+    // The 4-slot irregular keeps the slots distinct: `ran` is only a past.
+    expect(findEntry(h.lookup("run"), "VERB", "PASTPART").lemma).toBe("run")
+    expect(h.lookup("ran").every((e) => e.feat === "PAST")).toBe(true)
   })
 
   it("tags US/UK spelling variants from VarCon and defaults the rest to both", () => {

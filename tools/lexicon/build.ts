@@ -16,6 +16,7 @@ import { parseAgid } from "./sources/agid"
 import { parseMoby } from "./sources/moby"
 import { parseVarcon } from "./sources/varcon"
 import { _internal as delafInternal } from "./sources/delaf"
+import { compoundEntries } from "./sources/compounds"
 import { EN_SYNTAX } from "./syntax/en"
 import { PT_BR_SYNTAX } from "./syntax/pt-BR"
 
@@ -119,7 +120,7 @@ function writeDict(dict: Dictionary, name: string): number {
 async function buildPtBr(): Promise<number> {
   await ensureDelafDic()
   process.stdout.write("parsing DELAF (pt-BR)\n")
-  const entries = await streamDelaf(DELAF_DIC)
+  const entries = [...(await streamDelaf(DELAF_DIC)), ...compoundEntries()]
 
   const dict: Dictionary = {
     lang: "pt-BR",

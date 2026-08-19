@@ -54,13 +54,13 @@ describe("header validation", () => {
   })
 
   it("fails closed on an unsupported version", () => {
-    const bytes = new Uint8Array([0x4d, 0x42, 0x4c, 0x58, 2, 0, 0, 0])
+    const bytes = new Uint8Array([0x4d, 0x42, 0x4c, 0x58, 1, 0, 0, 0])
 
     const bad = openLexicon(bytes)
 
     switch (bad.ok) {
       case false:
-        expect(bad.error).toEqual({ kind: "bad-version", found: 2 })
+        expect(bad.error).toEqual({ kind: "bad-version", found: 1 })
         return
       case true:
         throw new Error("expected failure")

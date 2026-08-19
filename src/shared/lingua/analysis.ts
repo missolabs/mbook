@@ -72,10 +72,21 @@ export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
   const hidden = collectHidden(input.spans)
   const stripped = strip(input.text, hidden)
 
-  const tokens = tokenize(stripped.text, input.language)
-  const sourceTokens = tokens.map((token) => toSource(token, stripped.map))
-
   const scope = variantScope(input.language)
+
+  // Whole-form oracle: a connected word (hyphen/apostrophe) the lexicon knows
+  // whole — exactly or casefolded — is never split by the tokenizer.
+  const keepWhole = (word: string): boolean => {
+    switch (input.lexicon.lookup(word, scope).length > 0) {
+      case true:
+        return true
+      case false:
+        return input.lexicon.lookup(word.toLowerCase(), scope).length > 0
+    }
+  }
+
+  const tokens = tokenize(stripped.text, input.language, keepWhole)
+  const sourceTokens = tokens.map((token) => toSource(token, stripped.map))
   const raw = segment(sourceTokens, input.lexicon.syntax.closedClass.abbreviations)
 
   const sentences = raw.map((sentence) => {
@@ -93,7 +104,7 @@ export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
 
   const spans = input.spans.map((span) => ({ span, anchor: anchorSpan(span, sentences) }))
 
-  const discourse = buildDiscourseLinks({ sentences, spans, valency: input.lexicon.syntax.valency })
+  const discourse = buildDiscourseLinks({ sentences, spans, syntax: input.lexicon.syntax })
 
   return {
     text: input.text,

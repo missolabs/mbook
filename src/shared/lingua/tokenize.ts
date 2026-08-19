@@ -14,8 +14,18 @@
 //     `it`+`'s`); the stem hits the lexicon and the clitic is tagged from a
 //     closed table in tag.ts. A word whose post-apostrophe tail is not a clitic
 //     (`o'clock`, `O'Brien`) is left whole so the lexicon can tag it directly.
+//
+// Splitting is gated by a whole-form oracle: a HYPHENATED word the lexicon
+// already knows whole (`quinta-feira`, a curated compound) is never split —
+// the dictionary's own knowledge outranks the mechanical rule. Apostrophe
+// words are exempt from the oracle: the lexicon does list full contractions
+// (`don't`), but the Penn stem+clitic split is the deliberate analysis and
+// must win. The oracle is a pure predicate the caller closes over its
+// lexicon, so this module stays dictionary-free.
 
 import type { Language } from "./language"
+
+export type WholeFormOracle = (word: string) => boolean
 
 export type TokenKind = "word" | "punctuation" | "number"
 
@@ -38,7 +48,7 @@ export type SourceToken = {
   source: Span
 }
 
-export function tokenize(text: string, language: Language): readonly Token[] {
+export function tokenize(text: string, language: Language, keepWhole: WholeFormOracle): readonly Token[] {
   const tokens: Token[] = []
 
   let index = 0
@@ -51,7 +61,7 @@ export function tokenize(text: string, language: Language): readonly Token[] {
         index = step.next
         continue
       case "word":
-        splitWord(text, step.from, step.to, language, tokens)
+        splitWord(text, step.from, step.to, language, keepWhole, tokens)
         index = step.next
         continue
       case "number":
@@ -163,8 +173,19 @@ function splitWord(
   from: number,
   to: number,
   language: Language,
+  keepWhole: WholeFormOracle,
   out: Token[],
 ): void {
+  const word = text.slice(from, to)
+
+  switch (word.includes("-") && keepWhole(word)) {
+    case true:
+      pushWord(text, from, to, out)
+      return
+    case false:
+      break
+  }
+
   switch (language.kind) {
     case "pt-BR":
       splitHyphens(text, from, to, out)
@@ -177,6 +198,7 @@ function splitWord(
       return
   }
 }
+
 
 // pt clitics and compounds alike: emit each hyphen-separated run as its own word
 // token, dropping the hyphens. Mesoclisis (`dar-te-ei`) falls out for free.

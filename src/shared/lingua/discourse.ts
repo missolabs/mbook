@@ -24,7 +24,7 @@
 
 import type { Optional } from "../optional"
 import type { AnchoredSpan, Sentence } from "./analysis"
-import type { ValencyFrame, ValencyHint } from "./model"
+import type { SyntaxData, ValencyFrame, ValencyHint } from "./model"
 import type { Relation } from "./relations"
 
 export type DiscourseLinkKind = "elided-object"
@@ -43,14 +43,14 @@ export type DiscourseLink = {
 export type DiscourseInput = {
   sentences: readonly Sentence[]
   spans: readonly AnchoredSpan[]
-  valency: readonly ValencyHint[]
+  syntax: SyntaxData
 }
 
 export function buildDiscourseLinks(input: DiscourseInput): readonly DiscourseLink[] {
   const links: DiscourseLink[] = []
 
   input.sentences.forEach((sentence, si) => {
-    for (const verb of objectlessTransitiveVerbs(sentence, input.valency)) {
+    for (const verb of objectlessTransitiveVerbs(sentence, input.syntax)) {
       const antecedent = resolveAntecedent(input, si, verb)
 
       switch (antecedent.kind) {
@@ -76,8 +76,15 @@ export function buildDiscourseLinks(input: DiscourseInput): readonly DiscourseLi
 type Anchor = { sentence: number; token: number }
 
 // VP heads whose lemma the valency data declares object-taking, yet no
-// object-of or complement-of relation was built for.
-function objectlessTransitiveVerbs(sentence: Sentence, valency: readonly ValencyHint[]): readonly number[] {
+// object-of or complement-of relation was built for. Two periphrasis shapes
+// are excused, not elided:
+//   * an auxiliary head another VP chains onto (`tinha` in `tinha comido`) —
+//     its complement-of already claims it;
+//   * a PASSIVE participle (`comido` in `foi comido`): the patient became the
+//     subject, so the missing object is the construction, not an ellipsis.
+//     A participle chained onto ter/haver/have keeps its candidacy — `Ela
+//     tinha comido.` really does elide what she ate.
+function objectlessTransitiveVerbs(sentence: Sentence, syntax: SyntaxData): readonly number[] {
   const out: number[] = []
 
   for (const chunk of sentence.chunks) {
@@ -90,10 +97,10 @@ function objectlessTransitiveVerbs(sentence: Sentence, valency: readonly Valency
         continue
     }
 
-    const expects = expectsObject(lemmaAt(sentence, chunk.head), valency)
+    const expects = expectsObject(lemmaAt(sentence, chunk.head), syntax.valency)
     const found = sentence.relations.some((r) => claimsObject(r, chunk.head))
 
-    switch (expects && found === false) {
+    switch (expects && found === false && isPassiveParticiple(sentence, chunk.head, syntax) === false) {
       case true:
         out.push(chunk.head)
         continue
@@ -103,6 +110,39 @@ function objectlessTransitiveVerbs(sentence: Sentence, valency: readonly Valency
   }
 
   return out
+}
+
+// This verb is a participle chained (complement-of) onto a passive auxiliary.
+function isPassiveParticiple(sentence: Sentence, head: number, syntax: SyntaxData): boolean {
+  const participle = featAt(sentence, head).length > 0 &&
+    syntax.verbFeats.participlePrefixes.some((p) => featAt(sentence, head).startsWith(p))
+
+  switch (participle) {
+    case false:
+      return false
+    case true:
+      break
+  }
+
+  const chain = sentence.relations.find((r) => r.kind === "complement-of" && r.dependent === head)
+
+  switch (chain === undefined) {
+    case true:
+      return false
+    case false:
+      return syntax.passiveAuxiliaries.includes(lemmaAt(sentence, chain!.head))
+  }
+}
+
+function featAt(sentence: Sentence, index: number): string {
+  const token = sentence.tokens[index]!
+
+  switch (token.role) {
+    case "content":
+      return token.tagged.feat
+    case "punctuation":
+      return ""
+  }
 }
 
 function lemmaAt(sentence: Sentence, index: number): string {
@@ -125,6 +165,10 @@ function claimsObject(relation: Relation, head: number): boolean {
     case "subject-of":
       return false
     case "modifier-of":
+      return false
+    case "predicate-of":
+      return false
+    case "agent-of":
       return false
   }
 }

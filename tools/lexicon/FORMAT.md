@@ -1,4 +1,4 @@
-# mbook `.dict` format (v1)
+# mbook `.dict` format (v2)
 
 One `.dict` file holds one language's compiled lexicon **and** its hand-authored
 syntax data. It is optimised for exact-surface-form lookup at low memory: a
@@ -52,7 +52,7 @@ mirror of this document. `tools/lexicon/format/encode.ts` is the writer.
 | field         | type      | value / meaning                          |
 |---------------|-----------|------------------------------------------|
 | magic         | u8[4]     | `4D 42 4C 58` = ASCII `"MBLX"`           |
-| version       | u32       | `1`                                      |
+| version       | u32       | `2`                                      |
 | langLen       | u8        | byte length of `lang`                    |
 | lang          | u8[langLen] | UTF-8 language tag (`"pt-BR"`, `"en"`)  |
 | variantScheme | u8        | `VariantScheme`                          |
@@ -160,9 +160,14 @@ object (not a packed table). Schema (`SyntaxData` in `format/model.ts`):
              |"presentational" }  // presentational: sole argument is a POSTVERBAL subject
   ],
   "complementizers": ["that"],  // words opening a clausal complement after a verb
+  "relativePronouns": ["who"],  // a subject that IS one of these defers to its antecedent
+  "passiveAuxiliaries": ["be"], // lemmas that head the passive periphrasis (aux + participle)
+  "agentMarkers": ["by"],       // adposition surface forms introducing a passive agent PP
+  "expletives": ["there"],      // existential dummies licensing a postverbal copular subject
   "verbFeats": {                // morphology-code prefixes, in this dict's feat vocabulary
     "finitePrefixes":     ["..."],
-    "infinitivePrefixes": ["..."]
+    "infinitivePrefixes": ["..."],
+    "participlePrefixes": ["..."]
   }
 }
 ```
@@ -178,7 +183,7 @@ A reader may verify the trailer as an integrity/truncation check.
 
 ## Lookup algorithm (reference)
 
-1. Verify header magic and `version == 1`; read metadata.
+1. Verify header magic and `version == 2`; read metadata.
 2. Load the offset tables (sections 3–4) and keep `entriesBase` and the two
    pools addressable.
 3. `lookup(form)`: UTF-8-encode `form`; binary-search `formOffsets`/`formBlob`
@@ -196,3 +201,9 @@ reordering, different entry width, changed enum numbering — MUST bump it. A
 reader encountering an unknown version fails closed (returns an error) rather
 than guessing. New `Pos`/`Variant`/`VariantScheme` codes are additive only:
 appended, never renumbered.
+
+History: v2 grew the syntax JSON schema (`relativePronouns`,
+`passiveAuxiliaries`, `agentMarkers`, `expletives`,
+`verbFeats.participlePrefixes`). The binary layout is unchanged from v1, but
+the schema is part of the reader contract — an engine handed a v1 dict would
+read `undefined` where it expects those lists — so the version gates it.

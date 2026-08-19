@@ -74,13 +74,14 @@ export type ClosedClass = {
   abbreviations: string[]
 }
 
-// Which morphology-code prefixes mark a verb form finite or infinitive, in the
-// dictionary's own feat vocabulary. A language whose infinitive is not
-// morphologically distinct (English) declares no infinitive prefixes, and the
-// rules gated on them simply never fire there.
+// Which morphology-code prefixes mark a verb form finite, infinitive or past
+// participle, in the dictionary's own feat vocabulary. A language whose
+// infinitive is not morphologically distinct (English) declares no infinitive
+// prefixes, and the rules gated on them simply never fire there.
 export type VerbFeatMarks = {
   finitePrefixes: string[]
   infinitivePrefixes: string[]
+  participlePrefixes: string[]
 }
 
 export type SyntaxData = {
@@ -89,6 +90,10 @@ export type SyntaxData = {
   suffixGuess: SuffixRule[]
   valency: ValencyHint[]
   complementizers: string[]
+  relativePronouns: string[]
+  passiveAuxiliaries: string[]
+  agentMarkers: string[]
+  expletives: string[]
   verbFeats: VerbFeatMarks
 }
 
