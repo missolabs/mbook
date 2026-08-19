@@ -32,7 +32,6 @@ import type { BookDoc } from "../shared/book/parse"
 type Shell = {
   titlebar: HTMLElement
   docTitle: HTMLElement
-  navToggle: HTMLElement
   editorHost: HTMLElement
   navHost: HTMLElement
   statusLeft: HTMLElement
@@ -41,10 +40,6 @@ type Shell = {
 
 function buildShell(root: HTMLElement): Shell {
   const titlebar = element("div", ["mb-titlebar"])
-
-  const navToggle = element("button", ["mb-side-toggle", "mb-nav-toggle"])
-  navToggle.setAttribute("title", "Alternar navegador (⌘\\)")
-  navToggle.appendChild(railGlyph(6))
 
   const docTitle = element("div", ["mb-doc-title"])
   docTitle.textContent = "untitled"
@@ -63,44 +58,9 @@ function buildShell(root: HTMLElement): Shell {
   root.appendChild(titlebar)
   root.appendChild(editorHost)
   root.appendChild(navHost)
-  // After the rail so it paints above it: the toggle lives on the rail's own
-  // 16px axis, in its own row below the titlebar — the titlebar's left region
-  // belongs to the traffic lights alone.
-  root.appendChild(navToggle)
   root.appendChild(statusbar)
 
-  return { titlebar, docTitle, navToggle, editorHost, navHost, statusLeft, statusRight }
-}
-
-// The rail glyph: a window frame with its divider at x — 6 reads as the
-// left-hand rail.
-function railGlyph(dividerX: number): SVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
-  svg.setAttribute("viewBox", "0 0 16 14")
-  svg.setAttribute("width", "16")
-  svg.setAttribute("height", "14")
-
-  const frame = document.createElementNS("http://www.w3.org/2000/svg", "rect")
-  frame.setAttribute("x", "1")
-  frame.setAttribute("y", "1")
-  frame.setAttribute("width", "14")
-  frame.setAttribute("height", "12")
-  frame.setAttribute("rx", "2.5")
-  frame.setAttribute("fill", "none")
-  frame.setAttribute("stroke", "currentColor")
-  frame.setAttribute("stroke-width", "1.2")
-  svg.appendChild(frame)
-
-  const divider = document.createElementNS("http://www.w3.org/2000/svg", "line")
-  divider.setAttribute("x1", String(dividerX))
-  divider.setAttribute("y1", "1.6")
-  divider.setAttribute("x2", String(dividerX))
-  divider.setAttribute("y2", "12.4")
-  divider.setAttribute("stroke", "currentColor")
-  divider.setAttribute("stroke-width", "1.2")
-  svg.appendChild(divider)
-
-  return svg
+  return { titlebar, docTitle, editorHost, navHost, statusLeft, statusRight }
 }
 
 const NAV_COLLAPSE_KEY = "mbook.navigator.collapsed"
@@ -336,8 +296,6 @@ switch (app) {
 
       localStorage.setItem(NAV_COLLAPSE_KEY, String(navigator.collapsed()))
     }
-
-    shell.navToggle.addEventListener("click", toggleNavigator)
 
     // The rail resizes from its right edge — the edge facing the page —
     // (interactjs owns the edge grab and the col-resize cursor). Width lives in the --mb-nav-w custom property so
