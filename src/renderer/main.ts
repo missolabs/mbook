@@ -44,7 +44,7 @@ function buildShell(root: HTMLElement): Shell {
 
   const navToggle = element("button", ["mb-side-toggle", "mb-nav-toggle"])
   navToggle.setAttribute("title", "Alternar navegador (⌘\\)")
-  navToggle.appendChild(railGlyph(10))
+  navToggle.appendChild(railGlyph(6))
   titlebar.appendChild(navToggle)
 
   const docTitle = element("div", ["mb-doc-title"])
@@ -69,8 +69,8 @@ function buildShell(root: HTMLElement): Shell {
   return { titlebar, docTitle, navToggle, editorHost, navHost, statusLeft, statusRight }
 }
 
-// The rail glyph: a window frame with its divider at x — 10 reads as the
-// right-hand rail.
+// The rail glyph: a window frame with its divider at x — 6 reads as the
+// left-hand rail.
 function railGlyph(dividerX: number): SVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
   svg.setAttribute("viewBox", "0 0 16 14")
@@ -336,8 +336,8 @@ switch (app) {
 
     shell.navToggle.addEventListener("click", toggleNavigator)
 
-    // The rail resizes from its left edge (interactjs owns the edge grab and
-    // the col-resize cursor). Width lives in the --mb-nav-w custom property so
+    // The rail resizes from its right edge — the edge facing the page —
+    // (interactjs owns the edge grab and the col-resize cursor). Width lives in the --mb-nav-w custom property so
     // every pinned inner width follows, and so the collapsed class's width:0
     // still outranks it. The page never moves — the rail is an overlay.
     const applyNavWidth = (px: number) => {
@@ -349,7 +349,7 @@ switch (app) {
     applyNavWidth(navWidth)
 
     interact(shell.navHost).resizable({
-      edges: { left: true, right: false, top: false, bottom: false },
+      edges: { left: false, right: true, top: false, bottom: false },
       listeners: {
         start: () => {
           shell.navHost.classList.add("resizing")

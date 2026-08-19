@@ -74,7 +74,8 @@
 }
 
 .mb-nav-toggle {
-  right: 16px;
+  /* After the traffic lights (x:20, ~52px wide), on the rail's own side. */
+  left: 84px;
 }
 
 /* min-height:0 lets the 1fr track shrink to the viewport so the editor's own
@@ -97,24 +98,24 @@
    stays continuous; collapse animates width with the inner width pinned so
    content doesn't reflow mid-animation.
 
-   An OVERLAY on the editor's right edge, not a grid column: growing or
+   An OVERLAY on the editor's left edge, not a grid column: growing or
    toggling the rail never moves the text area. */
 .mb-nav {
   position: absolute;
   top: 44px;
   bottom: var(--m-statusbar-h);
-  right: 0;
+  left: 0;
   width: var(--mb-nav-w);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid var(--m-hair);
+  border-right: 1px solid var(--m-hair);
   transition: width 0.18s ease;
 }
 
 .mb-nav.collapsed {
   width: 0;
-  border-left-color: transparent;
+  border-right-color: transparent;
 }
 
 /* While the edge is being dragged the width must follow the pointer, not the
