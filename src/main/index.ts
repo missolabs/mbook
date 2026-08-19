@@ -4,7 +4,7 @@
 
 import { app, BrowserWindow } from "electron"
 
-import { registerIpcHandlers } from "./ipc/handlers"
+import { primeMenuState, registerIpcHandlers } from "./ipc/handlers"
 import { loadLingua, logLingua } from "./lingua"
 import { setLingua } from "./lingua-holder"
 import { installMenu } from "./menu"
@@ -34,6 +34,8 @@ function start(): void {
       registerIpcHandlers()
 
       installMenu()
+
+      primeMenuState()
 
       createMainWindow()
 

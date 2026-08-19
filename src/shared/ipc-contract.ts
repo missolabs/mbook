@@ -44,6 +44,7 @@ export const channelRequest = {
   "book:save-as": z.object({ content: z.string() }),
   "book:recent": z.object({}),
   "book:set-edited": z.object({ edited: z.boolean(), name: z.string() }),
+  "menu:outline": z.object({ chapters: z.array(z.object({ title: z.string() })) }),
 }
 
 export const channelResponse = {
@@ -81,6 +82,7 @@ export const channelResponse = {
     z.object({ entries: z.array(z.object({ path: z.string() })) }),
   ),
   "book:set-edited": result(z.object({ acked: z.literal(true) })),
+  "menu:outline": result(z.object({ acked: z.literal(true) })),
 }
 
 export type ChannelName = keyof typeof channelRequest
@@ -98,9 +100,19 @@ export type ChannelResponse<C extends ChannelName> = z.infer<
 // ---------------------------------------------------------------------------
 
 export const eventPayload = {
-  "evt:menu": z.object({
-    action: z.enum(["new", "open", "save", "save-as"]),
-  }),
+  "evt:menu": z.discriminatedUnion("action", [
+    z.object({ action: z.literal("new") }),
+    z.object({ action: z.literal("open") }),
+    z.object({ action: z.literal("save") }),
+    z.object({ action: z.literal("save-as") }),
+    z.object({ action: z.literal("open-path"), path: z.string() }),
+    z.object({ action: z.literal("toggle-navigator") }),
+    z.object({ action: z.literal("zoom-in") }),
+    z.object({ action: z.literal("zoom-out") }),
+    z.object({ action: z.literal("zoom-reset") }),
+    z.object({ action: z.literal("go-title") }),
+    z.object({ action: z.literal("go-chapter"), index: z.number() }),
+  ]),
 }
 
 export type EventName = keyof typeof eventPayload

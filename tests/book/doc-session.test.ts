@@ -99,7 +99,7 @@ describe("DocSession", () => {
     expect(lastFile(rec)).toEqual({ kind: "named", name: "dune.md", dirty: false })
   })
 
-  it("opens a known path directly and flushes pending work first — the command bar's recents", async () => {
+  it("opens a known path directly and flushes pending work first — File > Open Recent", async () => {
     const { session, rec } = makeSession({
       bootstrap: {
         ok: true,

@@ -127,6 +127,10 @@ live in the status bar as you write.
 
 | Keys | |
 | --- | --- |
-| `⌘K` | the command bar — jump to any chapter, toggle the rail, zoom, open recent books |
 | `⌘\` | toggle the navigator rail (chapters + page thumbnails; drag its edge to resize) |
 | `⌘+` / `⌘-` / `⌘0` | zoom the page 50–200% without reflowing a single line |
+| `⌘1` … `⌘9` | jump to a chapter — the Go menu lists them by name, live |
+
+The menu bar is the control surface: File carries Open Recent from the
+ledger, View holds the navigator and zoom, and Go lists the book's own
+chapters as you write them.

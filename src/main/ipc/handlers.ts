@@ -18,6 +18,7 @@ import { err, ok } from "../../shared/result"
 
 import { readBookFile, writeBookFile } from "../files"
 import { scheduleAnalysis } from "../lingua/analyzer"
+import { setOutline, setRecents } from "../menu"
 import { mostRecent, recentEntries, recordRecent } from "../recent"
 
 const MD_FILTER = { name: "Markdown", extensions: ["md"] }
@@ -36,6 +37,7 @@ const handlers: HandlerTable = {
   "book:save-as": (request) => saveAs(request.content),
   "book:recent": () => recent(),
   "book:set-edited": (request) => setEdited(request.edited, request.name),
+  "menu:outline": (request) => outline(request.chapters),
 }
 
 export function registerIpcHandlers(): void {
@@ -114,6 +116,8 @@ async function open(): Promise<ChannelResponse<"book:open">> {
         case true:
           await recordRecent(picked.path)
 
+          await refreshRecentMenu()
+
           representFile(picked.path)
 
           scheduleAnalysis(picked.path, read.value)
@@ -132,6 +136,8 @@ async function openPath(path: string): Promise<ChannelResponse<"book:open-path">
       return read
     case true:
       await recordRecent(path)
+
+      await refreshRecentMenu()
 
       representFile(path)
 
@@ -173,6 +179,8 @@ async function saveAs(content: string): Promise<ChannelResponse<"book:save-as">>
           return written
         case true:
           await recordRecent(picked.path)
+
+          await refreshRecentMenu()
 
           representFile(picked.path)
 
@@ -265,4 +273,25 @@ function firstWindow(): Optional<BrowserWindow> {
     default:
       return { kind: "some", value: window }
   }
+}
+
+// The renderer streams the live chapter outline up; the Go menu mirrors it.
+async function outline(
+  chapters: readonly { title: string }[],
+): Promise<ChannelResponse<"menu:outline">> {
+  setOutline(chapters.map((chapter) => chapter.title))
+
+  return { ok: true, value: { acked: true } }
+}
+
+// File > Open Recent mirrors the ledger after every write to it — and once at
+// registration, so a fresh launch starts with the list populated.
+async function refreshRecentMenu(): Promise<void> {
+  const entries = await recentEntries()
+
+  setRecents(entries.map((entry) => entry.path))
+}
+
+export function primeMenuState(): void {
+  void refreshRecentMenu()
 }

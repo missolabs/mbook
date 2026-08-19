@@ -17,8 +17,6 @@ import { Statusbar } from "./statusbar"
 import type { StatusState } from "./statusbar"
 import { Titlebar } from "./titlebar"
 import { Navigator } from "./navigator"
-import { CommandPalette } from "./command/palette"
-import type { Command } from "./command/filter"
 import { DocSession } from "./doc-session"
 import { PageTracker } from "./page-tracker"
 import { createEditor, programmatic } from "./editor/editor"
@@ -458,12 +456,34 @@ switch (app) {
       navigator.setCurrent({ page: tracker.pageAtCursorLine(cursorLine), cursorLine })
     }
 
+    // The Go menu mirrors the outline; only a real title change crosses the
+    // bridge, so typing inside a chapter never rebuilds the application menu.
+    let outlineSignature = ""
+
+    const pushOutline = (doc: BookDoc) => {
+      const titles = chapterList(doc).map((chapter) => chapter.title)
+      const signature = titles.join("\u0000")
+
+      switch (signature === outlineSignature) {
+        case true:
+          return
+        case false:
+          break
+      }
+
+      outlineSignature = signature
+
+      void window.mbook["menu:outline"]({ chapters: titles.map((title) => ({ title })) })
+    }
+
     const renderDerived = () => {
       const snapshot = tracker.snapshot()
 
       navigator.render(snapshot.doc, snapshot.pageMap)
 
       view.dispatch({ effects: setPageJoints.of(pageJointsFor(snapshot.doc, snapshot.pageMap)) })
+
+      pushOutline(snapshot.doc)
 
       pushCounts()
     }
@@ -512,10 +532,6 @@ switch (app) {
 
     hook.changed = () => session.onDocChanged()
 
-    window.mbook.on("evt:menu", (payload) => {
-      void session.onMenu(payload.action)
-    })
-
     window.addEventListener("blur", () => {
       void session.flush()
     })
@@ -526,98 +542,52 @@ switch (app) {
       renderDerived()
     })
 
-    // ── The command bar ────────────────────────────────────────────────────
-    // Commands are built fresh on every open from the live seams this root
-    // already owns — chapters from the tracker's snapshot, view toggles, the
-    // session's file actions — and the recent books join asynchronously the
-    // moment the ledger answers.
-    const palette = new CommandPalette({
-      host: document.body,
-      onClose: () => view.focus(),
-    })
+    // ── The application menu ───────────────────────────────────────────────
+    // The macOS menu bar is the control surface: every evt:menu lands here and
+    // resolves against the live seams this root owns. A Go click carries a
+    // chapter INDEX — resolved against the outline at click time, so the menu
+    // never has to chase line drift while the author types.
+    const goChapter = (index: number) => {
+      const chapters = chapterList(tracker.snapshot().doc)
+      const chapter = chapters[index]
 
-    const bookName = (path: string): string => {
-      const leaf = path.split("/").at(-1)
-
-      switch (leaf === undefined) {
+      switch (chapter === undefined) {
         case true:
-          return path
+          return
         case false:
-          return leaf!.replace(/\.md$/, "")
+          navigate(chapter!.line)
+          return
       }
     }
 
-    const paletteCommands = (): Command[] => {
-      const snapshot = tracker.snapshot()
-      const chapters = chapterList(snapshot.doc)
-
-      const navigation: Command[] = [
-        { id: "nav-rosto", group: "navegação", title: "Página de rosto", hint: "", run: () => navigate(0) },
-        ...chapters.map((chapter, index) => ({
-          id: `nav-cap-${index}`,
-          group: "navegação",
-          title: `Capítulo ${index + 1} · ${chapter.title}`,
-          hint: "",
-          run: () => navigate(chapter.line),
-        })),
-      ]
-
-      const display: Command[] = [
-        { id: "view-nav", group: "exibição", title: "Alternar navegador", hint: "⌘\\", run: toggleNavigator },
-        { id: "view-zoom-in", group: "exibição", title: "Ampliar página", hint: "⌘+", run: () => stepZoom(1) },
-        { id: "view-zoom-out", group: "exibição", title: "Reduzir página", hint: "⌘−", run: () => stepZoom(-1) },
-        { id: "view-zoom-reset", group: "exibição", title: "Zoom 100%", hint: "⌘0", run: () => applyZoom(1) },
-      ]
-
-      const book: Command[] = [
-        { id: "book-new", group: "livro", title: "Novo livro", hint: "", run: () => void session.onMenu("new") },
-        { id: "book-open", group: "livro", title: "Abrir…", hint: "", run: () => void session.onMenu("open") },
-        { id: "book-save", group: "livro", title: "Guardar", hint: "", run: () => void session.onMenu("save") },
-        { id: "book-save-as", group: "livro", title: "Guardar como…", hint: "", run: () => void session.onMenu("save-as") },
-      ]
-
-      return [...navigation, ...display, ...book]
-    }
-
-    const openPalette = () => {
-      palette.open(paletteCommands())
-
-      void window.mbook["book:recent"]({}).then((result) => {
-        switch (result.ok) {
-          case false:
-            return
-          case true:
-            break
-        }
-
-        palette.extend(
-          result.value.entries.map((entry) => ({
-            id: `recent-${entry.path}`,
-            group: "recentes",
-            title: bookName(entry.path),
-            hint: "",
-            run: () => void session.openPathDoc(entry.path),
-          })),
-        )
-      })
-    }
-
-    window.addEventListener("keydown", (event) => {
-      switch (event.metaKey && event.key === "k") {
-        case false:
+    window.mbook.on("evt:menu", (payload) => {
+      switch (payload.action) {
+        case "new":
+        case "open":
+        case "save":
+        case "save-as":
+          void session.onMenu(payload.action)
           return
-        case true:
-          break
-      }
-
-      event.preventDefault()
-
-      switch (palette.isOpen()) {
-        case true:
-          palette.close()
+        case "open-path":
+          void session.openPathDoc(payload.path)
           return
-        case false:
-          openPalette()
+        case "toggle-navigator":
+          toggleNavigator()
+          return
+        case "zoom-in":
+          stepZoom(1)
+          return
+        case "zoom-out":
+          stepZoom(-1)
+          return
+        case "zoom-reset":
+          applyZoom(1)
+          return
+        case "go-title":
+          navigate(0)
+          return
+        case "go-chapter":
+          goChapter(payload.index)
           return
       }
     })

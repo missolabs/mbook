@@ -82,7 +82,7 @@ export class DocSession {
     await this.saveIfPossible()
   }
 
-  // Open a known path directly — the command bar's recents. Same discipline as
+  // Open a known path directly — File > Open Recent. Same discipline as
   // the dialog path: pending work is preserved before the switch, and the main
   // process records the path into the recent ledger.
   async openPathDoc(path: string): Promise<void> {
