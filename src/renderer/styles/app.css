@@ -74,10 +74,13 @@
 }
 
 .mb-nav-toggle {
-  /* Tight after the traffic lights (x:20, ~54px wide) — the leftmost sane
-     seat; the lights themselves are y-centred to the titlebar in window.ts so
-     both rows share one optical centre. */
-  left: 76px;
+  /* On the rail's own 16px content axis, in its own row under the titlebar:
+     the 16px glyph sits centred in a 24px button, so left:12 lands the
+     glyph's edge exactly on the axis every rail element shares. */
+  left: 12px;
+  top: 52px;
+  width: 24px;
+  z-index: 10;
 }
 
 /* min-height:0 lets the 1fr track shrink to the viewport so the editor's own
@@ -131,6 +134,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Clears the toggle's row at the rail's head. */
+  padding-top: 36px;
   padding-bottom: 16px;
 }
 

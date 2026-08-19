@@ -45,7 +45,6 @@ function buildShell(root: HTMLElement): Shell {
   const navToggle = element("button", ["mb-side-toggle", "mb-nav-toggle"])
   navToggle.setAttribute("title", "Alternar navegador (⌘\\)")
   navToggle.appendChild(railGlyph(6))
-  titlebar.appendChild(navToggle)
 
   const docTitle = element("div", ["mb-doc-title"])
   docTitle.textContent = "untitled"
@@ -64,6 +63,10 @@ function buildShell(root: HTMLElement): Shell {
   root.appendChild(titlebar)
   root.appendChild(editorHost)
   root.appendChild(navHost)
+  // After the rail so it paints above it: the toggle lives on the rail's own
+  // 16px axis, in its own row below the titlebar — the titlebar's left region
+  // belongs to the traffic lights alone.
+  root.appendChild(navToggle)
   root.appendChild(statusbar)
 
   return { titlebar, docTitle, navToggle, editorHost, navHost, statusLeft, statusRight }
