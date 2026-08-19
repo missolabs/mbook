@@ -425,14 +425,26 @@ html {
   z-index: 60;
 }
 
+/* Translucent, like everything else in the chrome: the bar is a thin dark
+   glass, and legibility comes from the PAGE receding — Chromium refuses
+   backdrop-filter on a vibrancy window, so instead of blurring what is behind
+   the panel, the app content itself softens while the bar is open. The page
+   breathing behind the command bar is the same move the window makes over the
+   desktop. */
+body.mb-cmd-open #app {
+  filter: blur(7px);
+}
+
+#app {
+  transition: filter 0.14s ease;
+}
+
 .mb-cmd-panel {
   width: 560px;
   margin: 13vh auto 0;
-  background: var(--m-overlay-bg);
+  background: rgba(19, 19, 20, 0.55);
   border: 1px solid var(--m-hair);
   box-shadow: var(--m-overlay-shadow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .mb-cmd-input {
@@ -489,6 +501,13 @@ html {
   background: var(--m-tint);
   border-left-color: var(--m-gold);
   color: var(--m-ink);
+}
+
+.mb-cmd-empty {
+  padding: 12px 14px 14px;
+  font-family: var(--m-font-sans);
+  font-size: 12px;
+  color: var(--m-mist);
 }
 
 .mb-cmd-hint {

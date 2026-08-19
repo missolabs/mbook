@@ -79,6 +79,7 @@ export class CommandPalette {
     this.selected = 0
     this.input.value = ""
     this.backdrop.style.display = ""
+    document.body.classList.add("mb-cmd-open")
     this.render()
     this.input.focus()
   }
@@ -107,6 +108,7 @@ export class CommandPalette {
 
     this.visible = false
     this.backdrop.style.display = "none"
+    document.body.classList.remove("mb-cmd-open")
     this.deps.onClose()
   }
 
@@ -176,6 +178,18 @@ export class CommandPalette {
     }
 
     this.list.replaceChildren()
+
+    switch (this.shown.length === 0) {
+      case true: {
+        const empty = document.createElement("div")
+        empty.className = "mb-cmd-empty"
+        empty.textContent = "nenhum comando"
+        this.list.append(empty)
+        break
+      }
+      case false:
+        break
+    }
 
     let lastGroup = ""
 
