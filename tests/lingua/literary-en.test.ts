@@ -256,6 +256,17 @@ describe("Murakami: the woman who called — relatives and the perfect", () => {
     expect(relation(sentence, "object-of", "name", "gave")).toBeDefined()
   })
 
+  it("nests an of-genitive under the preceding PP and locates a where-clause", () => {
+    const garden = only("She waited in the garden of the temple.")
+
+    expect(relation(garden, "modifier-of", "garden", "waited")).toBeDefined()
+    expect(relation(garden, "modifier-of", "temple", "garden")).toBeDefined()
+
+    const house = only("He returned to the house where a lamp burned.")
+
+    expect(relation(house, "located-in", "lamp", "house")).toBeDefined()
+  })
+
   it("resolves an OBJECT relative — the letter is what the priest burned", () => {
     const sentence = only("She kept the letter which the priest burned.")
 

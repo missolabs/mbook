@@ -170,6 +170,8 @@ function claimsObject(relation: Relation, head: number): boolean {
       return false
     case "agent-of":
       return false
+    case "located-in":
+      return false
   }
 }
 

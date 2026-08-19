@@ -40,6 +40,7 @@ export type RelationKind =
   | "modifier-of"
   | "predicate-of"
   | "agent-of"
+  | "located-in"
 
 export type RelationProvenance = "heuristic" | "pinned"
 
@@ -86,6 +87,7 @@ export function buildRelations(input: RelationInput): readonly Relation[] {
     }
   })
 
+  addLocations(relations, input)
   expandCoordination(relations, input)
 
   return relations
@@ -962,11 +964,24 @@ function addModifiers(relations: Relation[], tokens: readonly AnalyzedToken[], n
 }
 
 // A PP attaches to the head it trails: the nearest preceding NP or VP chunk.
-// One PP outranks that default — the agent of a passive (`comido pelo gato`,
-// `seen by the sailor`): its adposition is a declared agent marker and its
-// anchor is a passive participle, so the edge is `agent-of`, the relation the
-// "who did it" graph question reads.
+// Two PPs outrank that default. A GENITIVE PP directly abutting a preceding
+// PP nests under that PP's head (`ao fundo do poço` — poço qualifies fundo,
+// not the verb), which is what lets qualification chains answer "quais? de
+// onde?". And the agent of a passive (`comido pelo gato`, `seen by the
+// sailor`): its adposition is a declared agent marker and its anchor is a
+// passive participle, so the edge is `agent-of`, the relation the "who did
+// it" graph question reads.
 function addAttachment(relations: Relation[], input: RelationInput, ci: number): void {
+  const genitiveHost = nestedGenitiveHost(input, ci)
+
+  switch (genitiveHost.kind) {
+    case "some":
+      relations.push(relation("modifier-of", input.chunks[ci]!.head, genitiveHost.value, "heuristic"))
+      return
+    case "none":
+      break
+  }
+
   const anchor = nearestAnchorBefore(input.chunks, ci)
 
   switch (anchor.kind) {
@@ -986,6 +1001,128 @@ function addAttachment(relations: Relation[], input: RelationInput, ci: number):
       relations.push(relation("modifier-of", input.chunks[ci]!.head, input.chunks[anchor.value]!.head, "heuristic"))
       return
   }
+}
+
+// The head this genitive PP nests under: the immediately preceding chunk when
+// it is a PP with zero tokens between them and this PP opens on a declared
+// genitive marker. Any gap (a comma, an intervening word) breaks the nest and
+// the default anchoring applies.
+function nestedGenitiveHost(input: RelationInput, ci: number): Optional<number> {
+  switch (ci === 0) {
+    case true:
+      return { kind: "none" }
+    case false:
+      break
+  }
+
+  const previous = input.chunks[ci - 1]!
+  const chunk = input.chunks[ci]!
+
+  switch (previous.kind === "PP" && previous.to === chunk.from) {
+    case false:
+      return { kind: "none" }
+    case true:
+      break
+  }
+
+  const opener = input.tokens[chunk.from]!
+
+  switch (opener.role) {
+    case "punctuation":
+      return { kind: "none" }
+    case "content":
+      break
+  }
+
+  switch (input.syntax.genitiveMarkers.includes(opener.tagged.token.text.toLowerCase())) {
+    case true:
+      return { kind: "some", value: previous.head }
+    case false:
+      return { kind: "none" }
+  }
+}
+
+// Place relatives: `o quintal do vizinho, onde um poço esperava` locates the
+// embedded clause's subject IN the antecedent — located-in(poço -> quintal).
+// The antecedent is the nominal before the place adverb (one comma may
+// intervene), climbed out of any genitive chain to the outermost nominal head
+// (`do vizinho` resolves up to quintal); the located thing is the subject the
+// per-chunk passes already found for the first VP after the adverb. Runs as a
+// post-pass because it reads those subject relations.
+function addLocations(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    switch (token.role) {
+      case "punctuation":
+        return
+      case "content":
+        break
+    }
+
+    switch (input.syntax.relativePlaceAdverbs.includes(token.tagged.token.text.toLowerCase())) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const antecedent = antecedentBefore(input, ti)
+
+    switch (antecedent.kind) {
+      case "none":
+        return
+      case "some":
+        break
+    }
+
+    const place = climbGenitives(relations, input, antecedent.value)
+
+    const vp = input.chunks.find((c) => c.kind === "VP" && c.from > ti)
+
+    switch (vp === undefined || terminalBetween(input.tokens, ti, vp!.from)) {
+      case true:
+        return
+      case false:
+        break
+    }
+
+    const subject = relations.find((r) => r.kind === "subject-of" && r.head === vp!.head)
+
+    switch (subject === undefined) {
+      case true:
+        return
+      case false:
+        relations.push(relation("located-in", subject!.dependent, place, "heuristic"))
+        return
+    }
+  })
+}
+
+// Out of a genitive chain, to the outermost nominal: `vizinho` -(modifier-of)->
+// `quintal` stops there because quintal modifies nothing nominal above it.
+function climbGenitives(relations: readonly Relation[], input: RelationInput, at: number): number {
+  let current = at
+
+  for (let hops = 0; hops < 3; hops++) {
+    const up = relations.find((r) => r.kind === "modifier-of" && r.dependent === current)
+
+    switch (up === undefined) {
+      case true:
+        return current
+      case false:
+        break
+    }
+
+    const head = input.tokens[up!.head]!
+
+    switch (head.role === "content" && (head.tagged.pos === "NOUN" || head.tagged.pos === "PROPN")) {
+      case false:
+        return current
+      case true:
+        current = up!.head
+    }
+  }
+
+  return current
 }
 
 function isAgentPp(input: RelationInput, ci: number): boolean {
@@ -1131,6 +1268,8 @@ function spreadsAcrossCoordination(kind: RelationKind): boolean {
       return false
     case "agent-of":
       return true
+    case "located-in":
+      return false
   }
 }
 

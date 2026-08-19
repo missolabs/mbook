@@ -93,6 +93,8 @@ export type SyntaxData = {
   valency: ValencyHint[]
   complementizers: string[]
   relativePronouns: string[]
+  relativePlaceAdverbs: string[]
+  genitiveMarkers: string[]
   passiveAuxiliaries: string[]
   agentMarkers: string[]
   expletives: string[]

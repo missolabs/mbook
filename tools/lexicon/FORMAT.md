@@ -1,4 +1,4 @@
-# mbook `.dict` format (v2)
+# mbook `.dict` format (v3)
 
 One `.dict` file holds one language's compiled lexicon **and** its hand-authored
 syntax data. It is optimised for exact-surface-form lookup at low memory: a
@@ -52,7 +52,7 @@ mirror of this document. `tools/lexicon/format/encode.ts` is the writer.
 | field         | type      | value / meaning                          |
 |---------------|-----------|------------------------------------------|
 | magic         | u8[4]     | `4D 42 4C 58` = ASCII `"MBLX"`           |
-| version       | u32       | `2`                                      |
+| version       | u32       | `3`                                      |
 | langLen       | u8        | byte length of `lang`                    |
 | lang          | u8[langLen] | UTF-8 language tag (`"pt-BR"`, `"en"`)  |
 | variantScheme | u8        | `VariantScheme`                          |
@@ -161,6 +161,8 @@ object (not a packed table). Schema (`SyntaxData` in `format/model.ts`):
   ],
   "complementizers": ["that"],  // words opening a clausal complement after a verb
   "relativePronouns": ["who"],  // a subject that IS one of these defers to its antecedent
+  "relativePlaceAdverbs": ["where"], // open a place relative: "the house where a lamp burned"
+  "genitiveMarkers": ["of"],    // adpositions whose PP nests under a preceding PP's head
   "passiveAuxiliaries": ["be"], // lemmas that head the passive periphrasis (aux + participle)
   "agentMarkers": ["by"],       // adposition surface forms introducing a passive agent PP
   "expletives": ["there"],      // existential dummies licensing a postverbal copular subject
@@ -183,7 +185,7 @@ A reader may verify the trailer as an integrity/truncation check.
 
 ## Lookup algorithm (reference)
 
-1. Verify header magic and `version == 2`; read metadata.
+1. Verify header magic and `version == 3`; read metadata.
 2. Load the offset tables (sections 3–4) and keep `entriesBase` and the two
    pools addressable.
 3. `lookup(form)`: UTF-8-encode `form`; binary-search `formOffsets`/`formBlob`
@@ -204,6 +206,7 @@ appended, never renumbered.
 
 History: v2 grew the syntax JSON schema (`relativePronouns`,
 `passiveAuxiliaries`, `agentMarkers`, `expletives`,
-`verbFeats.participlePrefixes`). The binary layout is unchanged from v1, but
-the schema is part of the reader contract — an engine handed a v1 dict would
-read `undefined` where it expects those lists — so the version gates it.
+`verbFeats.participlePrefixes`); v3 added `relativePlaceAdverbs` and
+`genitiveMarkers`. The binary layout is unchanged since v1, but the schema is
+part of the reader contract — an engine handed an older dict would read
+`undefined` where it expects those lists — so the version gates it.

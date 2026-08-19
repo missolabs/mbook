@@ -45,10 +45,14 @@ export const PT_BR_SYNTAX: SyntaxData = {
     // Deictic and aspectual adverbs that never head an NP in running prose.
     // `assim` stays in conjunctions too: the double membership makes the closed
     // pass abstain and the context rules decide (`assim que` vs `assim mesmo`).
+    // `onde`/`antes`/`depois` matter doubly: each has a junk verb homograph
+    // in DELAF that produced garbage relations ("onde" as a VERB subjecting
+    // its clause), and `onde` is also the place-relative the located-in rule
+    // reads.
     adverbs: [
       "aqui", "aí", "ali", "cá", "lá", "acolá", "assim", "já", "ainda",
       "agora", "sempre", "nunca", "também", "não", "só", "apenas", "quase",
-      "talvez", "hoje", "ontem", "amanhã",
+      "talvez", "hoje", "ontem", "amanhã", "onde", "antes", "depois",
     ],
     abbreviations: [
       "Sr", "Sra", "Srta", "Dr", "Dra", "Prof", "Profa", "Exmo", "Exma", "etc",
@@ -223,6 +227,8 @@ export const PT_BR_SYNTAX: SyntaxData = {
   // with the reflexive clitic, so only the unambiguous `que` is declared.
   complementizers: ["que"],
   relativePronouns: ["que", "quem"],
+  relativePlaceAdverbs: ["onde"],
+  genitiveMarkers: ["de", "do", "da", "dos", "das"],
   // `estar` + particípio is stative-passive ("estava coberto de neve") and
   // takes the same agent PP when one appears, so it rides along with `ser`.
   // `ir` is here for the homograph, not the grammar: `foi/fora/fosse` resolve

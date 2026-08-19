@@ -196,6 +196,8 @@ export const EN_SYNTAX: SyntaxData = {
   // `that` never chunks as a bare-pronoun NP here (DET outranks PRON for it),
   // so only the human relatives need declaring.
   relativePronouns: ["who", "whom", "which"],
+  relativePlaceAdverbs: ["where"],
+  genitiveMarkers: ["of"],
   passiveAuxiliaries: ["be"],
   agentMarkers: ["by"],
   expletives: ["there"],

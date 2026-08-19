@@ -294,6 +294,30 @@ describe("Murakami: the perfect periphrasis carries the object", () => {
   })
 })
 
+describe("Murakami: which stairs, from where — genitive nesting and place relatives", () => {
+  it("nests a genitive PP under the preceding PP's head, not the verb", () => {
+    const sentence = only("Kumiko desceu ao fundo do poço.")
+
+    expect(relation(sentence, "modifier-of", "fundo", "desceu")).toBeDefined()
+    expect(relation(sentence, "modifier-of", "poço", "fundo")).toBeDefined()
+  })
+
+  it("qualifies an object through its genitive chain", () => {
+    const sentence = only("O rapaz subiu os degraus do templo.")
+
+    expect(relation(sentence, "object-of", "degraus", "subiu")).toBeDefined()
+    expect(relation(sentence, "modifier-of", "templo", "degraus")).toBeDefined()
+  })
+
+  it("locates the place relative's subject in the antecedent, climbing the genitive", () => {
+    const sentence = only("Minoru olhava o quintal do vizinho, onde um poço de pedra esperava.")
+
+    expect(tagged(sentence, "onde").pos).toBe("ADV")
+    expect(relation(sentence, "located-in", "poço", "quintal")).toBeDefined()
+    expect(relation(sentence, "modifier-of", "pedra", "poço")).toBeDefined()
+  })
+})
+
 describe("Murakami: an elided object resolves through the perfect", () => {
   const analysis = analyze("O pão sumiu. Ela tinha comido.")
 
