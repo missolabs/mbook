@@ -1,0 +1,235 @@
+// The pure projection from a BookAnalysis onto the store's relational rows. No
+// sqlite here: this maps the analysis tree to flat, insertable records and is
+// unit-tested on its own, so the store edge (store.ts) only has to bind these
+// rows to prepared statements. Token indices are kept faithful to the analysis'
+// own per-sentence token array — punctuation included — so chunk heads and
+// relation endpoints in the DB reference exactly the token rows they mean.
+
+import type { Attribution, Sentence, Speaker } from "../../shared/lingua/analysis"
+import type { BookAnalysis, ChapterPlace, SentenceLocation } from "../../shared/lingua/book-analysis"
+import type { Binding, GlyphSpan } from "../../shared/book/glyphs"
+import type { AnalyzedToken } from "../../shared/lingua/tag"
+import type { Optional } from "../../shared/optional"
+
+export type CharacterRow = { slug: string; canonical: string }
+
+export type TokenRow = {
+  idx: number
+  form: string
+  lemma: string
+  pos: string
+  features: string
+  provenance: string
+  charStart: number
+  charEnd: number
+}
+
+export type ChunkRow = {
+  idx: number
+  kind: string
+  headIdx: number
+  tokenStart: number
+  tokenEnd: number
+}
+
+export type RelationRow = {
+  headTokenIdx: number
+  depTokenIdx: number
+  relation: string
+  provenance: string
+}
+
+export type SentenceRow = {
+  paragraphIdx: number
+  idx: number
+  charStart: number
+  charEnd: number
+  chapterIdx: Optional<number>
+  chapterTitle: Optional<string>
+  line: number
+  col: number
+  attributionKind: string
+  attributionSlug: Optional<string>
+  tokens: readonly TokenRow[]
+  chunks: readonly ChunkRow[]
+  relations: readonly RelationRow[]
+}
+
+export type SpanRow = {
+  kind: string
+  charStart: number
+  charEnd: number
+  slug: Optional<string>
+  unresolvedName: Optional<string>
+}
+
+// A cross-sentence discourse link, still in analysis coordinates: the store
+// resolves (paragraphIdx, sentence idx) pairs to sentence row ids while it
+// writes the sentences of the same refresh.
+export type DiscourseLinkRow = {
+  paragraphIdx: number
+  fromSentenceIdx: number
+  fromTokenIdx: number
+  toSentenceIdx: number
+  toTokenIdx: number
+  kind: string
+  provenance: string
+}
+
+export type AnalysisRows = {
+  characters: readonly CharacterRow[]
+  sentences: readonly SentenceRow[]
+  spans: readonly SpanRow[]
+  discourseLinks: readonly DiscourseLinkRow[]
+}
+
+export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
+  const characters = analysis.cast.characters.map((c) => ({ slug: c.slug, canonical: c.name }))
+
+  const sentences: SentenceRow[] = []
+  const discourseLinks: DiscourseLinkRow[] = []
+
+  for (const slot of analysis.paragraphs) {
+    slot.analysis.sentences.forEach((sentence, idx) => {
+      sentences.push(sentenceRow(sentence, slot.locations[idx]!, slot.index, idx))
+    })
+
+    for (const link of slot.analysis.discourse) {
+      discourseLinks.push({
+        paragraphIdx: slot.index,
+        fromSentenceIdx: link.fromSentence,
+        fromTokenIdx: link.fromToken,
+        toSentenceIdx: link.toSentence,
+        toTokenIdx: link.toToken,
+        kind: link.kind,
+        provenance: link.provenance,
+      })
+    }
+  }
+
+  const spans = analysis.spans.map(spanRow)
+
+  return { characters, sentences, spans, discourseLinks }
+}
+
+function sentenceRow(sentence: Sentence, location: SentenceLocation, paragraphIdx: number, idx: number): SentenceRow {
+  const parts = attributionParts(sentence.attribution)
+  const chapter = chapterParts(location.chapter)
+
+  return {
+    paragraphIdx,
+    idx,
+    charStart: sentence.source.from,
+    charEnd: sentence.source.to,
+    chapterIdx: chapter.idx,
+    chapterTitle: chapter.title,
+    line: location.line,
+    col: location.col,
+    attributionKind: parts.kind,
+    attributionSlug: parts.slug,
+    tokens: sentence.tokens.map(tokenRow),
+    chunks: sentence.chunks.map((chunk, ci) => ({
+      idx: ci,
+      kind: chunk.kind,
+      headIdx: chunk.head,
+      tokenStart: chunk.from,
+      tokenEnd: chunk.to,
+    })),
+    relations: sentence.relations.map((relation) => ({
+      headTokenIdx: relation.head,
+      depTokenIdx: relation.dependent,
+      relation: relation.kind,
+      provenance: relation.provenance,
+    })),
+  }
+}
+
+function tokenRow(token: AnalyzedToken, idx: number): TokenRow {
+  switch (token.role) {
+    case "content":
+      return {
+        idx,
+        form: token.tagged.token.text,
+        lemma: token.tagged.lemma,
+        pos: token.tagged.pos,
+        features: token.tagged.feat,
+        provenance: token.tagged.provenance,
+        charStart: token.tagged.token.source.from,
+        charEnd: token.tagged.token.source.to,
+      }
+    case "punctuation":
+      return {
+        idx,
+        form: token.token.text,
+        lemma: token.token.text,
+        pos: "PUNCT",
+        features: "",
+        provenance: "punctuation",
+        charStart: token.token.source.from,
+        charEnd: token.token.source.to,
+      }
+  }
+}
+
+function spanRow(span: GlyphSpan): SpanRow {
+  const binding = bindingParts(span.binding)
+
+  return {
+    kind: span.kind,
+    charStart: span.from,
+    charEnd: span.to,
+    slug: binding.slug,
+    unresolvedName: binding.name,
+  }
+}
+
+type ChapterParts = { idx: Optional<number>; title: Optional<string> }
+
+function chapterParts(chapter: Optional<ChapterPlace>): ChapterParts {
+  switch (chapter.kind) {
+    case "none":
+      return { idx: { kind: "none" }, title: { kind: "none" } }
+    case "some":
+      return {
+        idx: { kind: "some", value: chapter.value.index },
+        title: { kind: "some", value: chapter.value.title },
+      }
+  }
+}
+
+type AttributionParts = { kind: string; slug: Optional<string> }
+
+function attributionParts(attribution: Attribution): AttributionParts {
+  switch (attribution.kind) {
+    case "narration":
+      return { kind: "narration", slug: { kind: "none" } }
+    case "speech":
+      return { kind: "speech", slug: speakerSlug(attribution.speaker) }
+    case "written":
+      return { kind: "written", slug: speakerSlug(attribution.writer) }
+  }
+}
+
+function speakerSlug(speaker: Speaker): Optional<string> {
+  switch (speaker.kind) {
+    case "slug":
+      return { kind: "some", value: speaker.slug }
+    case "unresolved":
+      return { kind: "none" }
+    case "unknown":
+      return { kind: "none" }
+  }
+}
+
+type BindingParts = { slug: Optional<string>; name: Optional<string> }
+
+function bindingParts(binding: Binding): BindingParts {
+  switch (binding.kind) {
+    case "resolved":
+      return { slug: { kind: "some", value: binding.slug }, name: { kind: "none" } }
+    case "unresolved":
+      return { slug: { kind: "none" }, name: { kind: "some", value: binding.name } }
+    case "unknown":
+      return { slug: { kind: "none" }, name: { kind: "none" } }
+  }
+}

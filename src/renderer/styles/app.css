@@ -199,14 +199,36 @@
    un-layered token definition by source order and vibrancy blurs through body.
    html itself is clear so only body's var(--m-bg) paints the material. */
 html.theme-dark {
-  --m-bg: rgba(19, 19, 20, 0.8);
+  /* 0.4, not 0.8: the body alpha is the only real translucency knob (macOS
+     fixes the blur), and at 0.8 only 20% of the already-tinted material
+     survived — near-opaque on anything but a high-contrast wallpaper. 0.4
+     passes 60% through this layer — well past assets/demo.png; user-tuned
+     to taste on the real wallpaper, live. */
+  --m-bg: rgba(19, 19, 20, 0.4);
   --mb-serif: "Literata Variable", Georgia, serif;
   /* The A5 sheet's surface — a whisper above the backdrop so the page reads as
-     an object without breaking the vibrancy; its trim is marked by --m-hair. */
-  --mb-page: rgba(255, 255, 255, 0.02);
+     an object without breaking the vibrancy; its trim is marked by --m-hair.
+     0.04 (was 0.02): the livelier backdrop needs a touch more sheet for the
+     page to keep reading as an object. */
+  --mb-page: rgba(255, 255, 255, 0.04);
 }
 
 html {
+  background: transparent;
+}
+
+/* No scrollbar: the navigator's page cards are the scroll affordance, and a
+   Chromium scrollbar is chrome the translucent sheet-on-desk illusion can't
+   carry. Scrolling itself (wheel/trackpad/keys) is untouched. */
+.cm-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* mdesign's .m-statusbar owns its surface (var(--m-bg)) — correct for opaque
+   apps, but here it re-paints the translucent body color over itself: the
+   band passed alpha² of the backdrop and read near-black. The material is
+   already continuous under it; the hairline alone marks the band. */
+.mb-statusbar {
   background: transparent;
 }
 
@@ -335,8 +357,9 @@ html {
   text-indent: 1.4em;
 }
 
+/* Exactly half the 1.45 body leading — the pagination model's half-line unit. */
 .mb-blank {
-  line-height: 0.8;
+  line-height: 0.725;
 }
 
 /* A block quotation — the set-book extract: drawn in from both edges of the

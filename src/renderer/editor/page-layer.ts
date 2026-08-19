@@ -100,6 +100,7 @@ function readSheets(view: EditorView, layer: HTMLElement): Sheets {
 
   let top = contentRect.top
   let shift = 0
+  let open = true
 
   for (const joint of joints) {
     const fillElement = joint.querySelector(".mb-page-fill")
@@ -127,12 +128,24 @@ function readSheets(view: EditorView, layer: HTMLElement): Sheets {
     if (head !== null) {
       top = head.getBoundingClientRect().top + shift
     }
+
+    // A joint with a head zone opens the next sheet; the end joint (folio
+    // only) closes the book with nothing open after it.
+    open = head !== null
   }
 
-  switch (segments.length === 0) {
-    // No joints rendered (or none exist): the visible region is one surface.
+  // The sheet left open past the last rendered joint — its closing joint sits
+  // below CodeMirror's viewport, so it cannot be measured yet. Paint it now,
+  // at least a full A5 tall, so a page scrolling into view carries its
+  // surface from the first pixel; whatever lies further below merges into
+  // this one long surface and is corrected on the next viewport measure,
+  // mirroring how unrendered regions above the viewport already behave.
+  // This also covers the no-joints-rendered case: the region is one surface.
+  const remaining = contentRect.bottom + shift - top
+
+  switch (open && remaining > 0) {
     case true:
-      segments.push({ top: contentRect.top - layerRect.top, height: contentRect.height })
+      segments.push({ top: top - layerRect.top, height: Math.max(remaining, pageHeight) })
       break
     case false:
       break

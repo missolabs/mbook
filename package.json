@@ -4,7 +4,8 @@
   "private": true,
   "main": "out/main/index.js",
   "trustedDependencies": [
-    "electron"
+    "electron",
+    "better-sqlite3"
   ],
   "scripts": {
     "dev": "electron-vite dev",
@@ -12,6 +13,7 @@
     "dist": "electron-vite build && electron-builder --mac",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "bun test",
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-builder install-app-deps"
   },
   "build": {
@@ -25,6 +27,15 @@
       "out/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "resources/dictionaries",
+        "to": "dictionaries",
+        "filter": [
+          "*.dict"
+        ]
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
@@ -35,7 +46,9 @@
     }
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.0",
     "@tailwindcss/vite": "^4.1",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.15.0",
     "electron": "^34.5.8",
     "electron-builder": "^26.15.3",
@@ -45,6 +58,8 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.11.0",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.12.4",

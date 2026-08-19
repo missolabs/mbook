@@ -5,25 +5,30 @@
 // the model counts what the screen shows. Derivation of the layout constants:
 //   A5 page 148 x 210 mm; margins top 19 / bottom 22 / sides 16.5
 //     -> text block 115 x 169 mm (434.6 x 638.9 px at 96 dpi).
-//   Literata 17.5 px on 1.6 leading = 28 px/line -> 638.9 / 28 ~= 22 lines.
-//   Average advance ~= 0.5 em of 17.5 px = 8.75 px/char -> 434.6 / 8.75 ~= 49 chars.
+//   Literata 14 px (10.5 pt on the printed page) on 1.45 leading = 20.3 px/line
+//     -> 638.9 / 20.3 ~= 31 lines.
+//   Average advance ~= 0.5 em of 14 px = 7 px/char -> 434.6 / 7 ~= 62 chars.
 //   The fold counts in HALF-LINE units: a text line is 2 units, and a blank
 //   source line renders at half a line (mb-blank), so it consumes 1. A page
 //   holding only blanks is still "fresh" — a title or chapter claims it
 //   rather than leaking onto the next page.
-//   A chapter opening measures ~3.5 lines (7 units); a separator ~3 (6).
+//   A chapter opening measures ~3 lines (6 units); a separator ~3 (6).
 
 import type { BookDoc, Block } from "./parse"
 import { assertNever } from "../assert"
 
-export const LINES_PER_PAGE = 22
-export const CHARS_PER_LINE = 49
+export const LINES_PER_PAGE = 31
+export const CHARS_PER_LINE = 62
 
 const UNITS_PER_LINE = 2
 const UNITS_PER_PAGE = LINES_PER_PAGE * UNITS_PER_LINE
 const BLANK_UNITS = 1
-// Measured: 2em air + the numbering eyebrow + 1.25em title + 0.9em air.
-const CHAPTER_HEAD_UNITS = 5
+// Eyebrow + 1.25em title + em air. The head's parts shrink with the font
+// (14/17.5 = 0.8) but the half-line unit shrinks with the leading
+// (20.3/28 = 0.725), so the head claims one unit more than at 17.5px.
+const CHAPTER_HEAD_UNITS = 6
+// The ornament is a bare body-type line plus line-native air, so its
+// half-line count is invariant under the type-size change.
 const SEPARATOR_UNITS = 6
 
 export type PageEntry = { fromLine: number; toLine: number; page: number }
@@ -150,8 +155,9 @@ function titleStep(fold: Fold, line: number, sink: RowSink): Step {
   const start = freshPage(fold)
   const totalPages = Math.max(fold.totalPages, start)
 
-  // A title page carries its mark in the upper third, the classic half-title.
-  setRow(sink, start, 7, { kind: "title", fill: 0.62 })
+  // A title page carries its mark in the upper third, the classic half-title:
+  // .mb-title sits 48mm (181.4px) below the text-block top -> 181.4 / 20.3 ~= row 9.
+  setRow(sink, start, 9, { kind: "title", fill: 0.62 })
 
   return {
     entry: { fromLine: line, toLine: line, page: start },

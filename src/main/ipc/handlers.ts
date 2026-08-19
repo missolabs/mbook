@@ -17,6 +17,7 @@ import type { Optional } from "../../shared/optional"
 import { err, ok } from "../../shared/result"
 
 import { readBookFile, writeBookFile } from "../files"
+import { scheduleAnalysis } from "../lingua/analyzer"
 import { mostRecent, recentEntries, recordRecent } from "../recent"
 
 const MD_FILTER = { name: "Markdown", extensions: ["md"] }
@@ -86,6 +87,8 @@ async function bootstrap(): Promise<ChannelResponse<"book:bootstrap">> {
           // "none" launch, not an error the user must dismiss.
           return ok({ kind: "none" })
         case true:
+          scheduleAnalysis(recentPath.value, read.value)
+
           return ok({
             kind: "restored",
             path: recentPath.value,
@@ -113,6 +116,8 @@ async function open(): Promise<ChannelResponse<"book:open">> {
 
           representFile(picked.path)
 
+          scheduleAnalysis(picked.path, read.value)
+
           return ok({ kind: "opened", path: picked.path, content: read.value })
       }
     }
@@ -130,6 +135,8 @@ async function openPath(path: string): Promise<ChannelResponse<"book:open-path">
 
       representFile(path)
 
+      scheduleAnalysis(path, read.value)
+
       return ok({ path, content: read.value })
   }
 }
@@ -145,6 +152,8 @@ async function save(
       return written
     case true:
       representFile(path)
+
+      scheduleAnalysis(path, content)
 
       return ok({ savedAt: new Date().toISOString() })
   }
@@ -166,6 +175,8 @@ async function saveAs(content: string): Promise<ChannelResponse<"book:save-as">>
           await recordRecent(picked.path)
 
           representFile(picked.path)
+
+          scheduleAnalysis(picked.path, content)
 
           return ok({ kind: "saved", path: picked.path })
       }

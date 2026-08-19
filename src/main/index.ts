@@ -5,10 +5,27 @@
 import { app, BrowserWindow } from "electron"
 
 import { registerIpcHandlers } from "./ipc/handlers"
+import { loadLingua, logLingua } from "./lingua"
+import { setLingua } from "./lingua-holder"
 import { installMenu } from "./menu"
 import { createMainWindow } from "./window"
 
 app.setName("mbook")
+
+// Load the dictionaries in the background: the window must never wait on them,
+// and a missing or corrupt lexicon just leaves the engine off. Its own Result is
+// logged and parked in the holder for later steps; nothing here can fail boot.
+function bootLingua(): void {
+  loadLingua()
+    .then((lingua) => {
+      setLingua(lingua)
+
+      logLingua(lingua)
+    })
+    .catch((caught: unknown) => {
+      console.error("[mbook] lexicon load crashed", caught)
+    })
+}
 
 function start(): void {
   app
@@ -19,6 +36,8 @@ function start(): void {
       installMenu()
 
       createMainWindow()
+
+      bootLingua()
 
       app.on("activate", () => {
         const noWindows = BrowserWindow.getAllWindows().length === 0

@@ -1,4 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown"
+import { autocompletion } from "@codemirror/autocomplete"
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language"
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands"
 import { keymap } from "@codemirror/view"
@@ -7,10 +8,12 @@ import type { Extension } from "@codemirror/state"
 import { tags } from "@lezer/highlight"
 import { frontmatterField } from "./frontmatter-field"
 import { structurePlugin } from "./structure-plugin"
+import { glyphPlugin } from "./glyph-plugin"
 import { paragraphPlugin } from "./paragraph-plugin"
 import { createTypingAids } from "./aids-extension"
 import { pageJointsField } from "./page-breaks"
 import { pageLayer } from "./page-layer"
+import { characterCompletions } from "./character-complete"
 
 // The book page, in mdesign's tokens: a true A5 sheet (148mm trim, border-box,
 // so the soft edge marks sit exactly on the trim) centred in the host, on
@@ -30,15 +33,19 @@ const bookTheme = EditorView.theme({
     height: "100%",
     backgroundColor: "transparent",
     color: "var(--m-ink)",
-    fontSize: "calc(17.5px * var(--mb-zoom, 1))",
+    // 14px = 10.5pt on the printed page (the sheet is mm-true, so CSS px map
+    // 1:1 to physical size at zoom 1). UK/EU A5 / demy trade convention runs
+    // 10–11pt body; Literata's print brief targets ~9–12pt, and its large
+    // x-height makes 10.5pt read like 11pt of a classic book face.
+    fontSize: "calc(14px * var(--mb-zoom, 1))",
   },
   ".cm-scroller": {
     overflow: "auto",
     fontFamily: "var(--mb-serif)",
-    // Book leading: print A5 runs ~1.35; 1.6 is the screen compromise that
-    // keeps the manuscript readable while the page fills like a set book.
-    // The pagination model derives its lines-per-page from this.
-    lineHeight: "1.6",
+    // Book leading: print A5 runs ~1.3; 1.45 is the screen compromise — the
+    // top of the trade convention's 120–145% band, airy enough for a backlit
+    // page. The pagination model derives its lines-per-page from this.
+    lineHeight: "1.45",
     paddingTop: "40px",
     paddingBottom: "45vh",
   },
@@ -72,12 +79,47 @@ const bookTheme = EditorView.theme({
   ".cm-line": {
     padding: "0",
   },
+  // A hollow block, not a beam: an outline one average advance wide (0.5em,
+  // the same figure the pagination model uses) framing the character the
+  // caret sits on — the sheet stays ink-free under it.
   "& .cm-cursorLayer .cm-cursor": {
-    borderLeft: "2px solid var(--m-gold)",
-    marginLeft: "-1px",
+    border: "1px solid var(--m-gold)",
+    width: "0.5em",
+    marginLeft: "0",
+    boxSizing: "border-box",
   },
   ".cm-selectionBackground": {
     backgroundColor: "var(--m-tint-2) !important",
+  },
+  // The completion popup, dressed as an mdesign overlay: the translucent panel
+  // material, a single hairline (R4), a square corner (R5), the small UI sans —
+  // not the manuscript serif. Carried in the theme (not app.css) so it outranks
+  // the autocomplete package's runtime-injected base theme by CM's own priority.
+  ".cm-tooltip.cm-tooltip-autocomplete": {
+    background: "var(--m-overlay-bg)",
+    border: "1px solid var(--m-hair)",
+    borderRadius: "0",
+    boxShadow: "var(--m-overlay-shadow)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+  },
+  ".cm-tooltip-autocomplete > ul": {
+    fontFamily: "var(--m-font-sans)",
+    fontSize: "12.5px",
+    maxHeight: "12em",
+  },
+  ".cm-tooltip-autocomplete > ul > li": {
+    padding: "3px 12px",
+    borderLeft: "2px solid transparent",
+    color: "var(--m-fog)",
+    lineHeight: "1.5",
+  },
+  // Gold marks the one alive row (R1); the fill is a surface tint, not a new
+  // colour (R3), so only the gold rule reads as accent.
+  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "var(--m-tint) !important",
+    borderLeftColor: "var(--m-gold)",
+    color: "var(--m-ink)",
   },
 })
 
@@ -102,8 +144,16 @@ export function createBookExtensions(): Extension[] {
     pageJointsField,
     pageLayer,
     structurePlugin,
+    glyphPlugin,
     paragraphPlugin,
     createTypingAids(),
+    // activateOnTyping so the list pops the instant `[` opens a binding; the
+    // name is the whole row, so the icon column is suppressed.
+    autocompletion({
+      override: [characterCompletions],
+      activateOnTyping: true,
+      icons: false,
+    }),
     // Portuguese hyphenation patterns hang off the content's language.
     EditorView.contentAttributes.of({ lang: "pt-BR" }),
     history(),
