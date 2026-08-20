@@ -224,9 +224,9 @@ function store(db: Db): LinguaStore {
   function writeDiscourseLink(link: DiscourseLinkRow, bookId: number, ids: ReadonlyMap<string, number>): void {
     insertDiscourseLink.run(
       bookId,
-      sentenceIdOf(ids, link.paragraphIdx, link.fromSentenceIdx),
+      sentenceIdOf(ids, link.fromParagraphIdx, link.fromSentenceIdx),
       link.fromTokenIdx,
-      sentenceIdOf(ids, link.paragraphIdx, link.toSentenceIdx),
+      sentenceIdOf(ids, link.toParagraphIdx, link.toSentenceIdx),
       link.toTokenIdx,
       link.kind,
       link.provenance,

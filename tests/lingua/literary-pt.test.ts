@@ -784,3 +784,61 @@ describe("relatives, questions and address", () => {
     expect(relation(sentence, "complement-of", "Um", "dizia")).toBeDefined()
   })
 })
+
+describe("discourse: pronouns find their people, articles their entities", () => {
+  function link(text: string, kind: string) {
+    return analyze(text).discourse.filter((d) => d.kind === kind)
+  }
+
+  function word(text: string, sentence: number, token: number): string {
+    const s = analyze(text).sentences[sentence]!
+    const t = s.tokens[token]!
+
+    switch (t.role) {
+      case "content":
+        return t.tagged.token.text
+      case "punctuation":
+        return t.token.text
+    }
+  }
+
+  it("a pronoun prefers the agreeing SUBJECT over a nearer oblique noun", () => {
+    const text = "Mizoguchi olhava o poço em silêncio. Ele parecia cansado."
+    const links = link(text, "anaphora")
+
+    expect(links.length).toBe(1)
+    expect(word(text, links[0]!.toSentence, links[0]!.toToken)).toBe("Mizoguchi")
+  })
+
+  it("gender agreement picks the right person", () => {
+    const text = "Kirie chorava no mercado. Ela segurava a bolsa."
+    const links = link(text, "anaphora")
+
+    expect(links.length).toBe(1)
+    expect(word(text, links[0]!.toSentence, links[0]!.toToken)).toBe("Kirie")
+  })
+
+  it("a possessive binds to the nearest subject — whose notebook it is", () => {
+    const text = "Kirie chegou cedo. Ela segurava o seu caderno."
+    const links = link(text, "anaphora")
+
+    const possessive = links.find((d) => word(text, d.fromSentence, d.fromToken) === "seu")!
+
+    expect(possessive).toBeDefined()
+    expect(word(text, possessive.toSentence, possessive.toToken)).toBe("Ela")
+  })
+
+  it("a definite NP resumes the entity its indefinite introduced", () => {
+    const text = "Havia um poço no quintal. O poço estava seco."
+    const links = link(text, "coreference")
+
+    expect(links.length).toBe(1)
+    expect(links[0]!.fromSentence).toBe(1)
+    expect(links[0]!.toSentence).toBe(0)
+    expect(word(text, links[0]!.toSentence, links[0]!.toToken)).toBe("poço")
+  })
+
+  it("a definite NP with no introduction claims nothing", () => {
+    expect(link("O poço estava seco.", "coreference")).toEqual([])
+  })
+})

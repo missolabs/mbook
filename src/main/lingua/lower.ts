@@ -67,11 +67,13 @@ export type SpanRow = {
 
 // A cross-sentence discourse link, still in analysis coordinates: the store
 // resolves (paragraphIdx, sentence idx) pairs to sentence row ids while it
-// writes the sentences of the same refresh.
+// writes the sentences of the same refresh. From- and to-paragraph differ for
+// the driver's cross-paragraph links.
 export type DiscourseLinkRow = {
-  paragraphIdx: number
+  fromParagraphIdx: number
   fromSentenceIdx: number
   fromTokenIdx: number
+  toParagraphIdx: number
   toSentenceIdx: number
   toTokenIdx: number
   kind: string
@@ -98,15 +100,29 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
 
     for (const link of slot.analysis.discourse) {
       discourseLinks.push({
-        paragraphIdx: slot.index,
+        fromParagraphIdx: slot.index,
         fromSentenceIdx: link.fromSentence,
         fromTokenIdx: link.fromToken,
+        toParagraphIdx: slot.index,
         toSentenceIdx: link.toSentence,
         toTokenIdx: link.toToken,
         kind: link.kind,
         provenance: link.provenance,
       })
     }
+  }
+
+  for (const link of analysis.bookLinks) {
+    discourseLinks.push({
+      fromParagraphIdx: link.fromParagraph,
+      fromSentenceIdx: link.fromSentence,
+      fromTokenIdx: link.fromToken,
+      toParagraphIdx: link.toParagraph,
+      toSentenceIdx: link.toSentence,
+      toTokenIdx: link.toToken,
+      kind: link.kind,
+      provenance: link.provenance,
+    })
   }
 
   const spans = analysis.spans.map(spanRow)

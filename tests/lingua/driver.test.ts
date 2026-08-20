@@ -212,6 +212,53 @@ describe("unresolved references and the language default", () => {
   })
 })
 
+describe("the narrator's continuity: one {Eu} glyph carries forward", () => {
+  const BOOK = [
+    "---",
+    "language: pt-BR",
+    "character: Narrador",
+    "---",
+    "",
+    "{Eu}[Narrador] cheguei tarde. Escrevia poesias.",
+    "",
+    "Mudei de ideia naquela noite.",
+  ].join("\n")
+
+  it("links a later first-person verb to the paragraph's own eu-mention", () => {
+    const analysis = analyze(BOOK, BOTH)
+    const first = analysis.paragraphs[0]!.analysis
+
+    const links = first.discourse.filter((d) => d.kind === "elided-subject")
+
+    expect(links.length).toBe(1)
+    expect(links[0]!.fromSentence).toBe(1)
+    expect(links[0]!.toSentence).toBe(0)
+
+    const to = first.sentences[0]!.tokens[links[0]!.toToken]!
+    expect(to.role === "content" && to.tagged.token.text).toBe("Eu")
+  })
+
+  it("carries the mention ACROSS the paragraph break for a glyphless paragraph", () => {
+    const analysis = analyze(BOOK, BOTH)
+
+    const cross = analysis.bookLinks.filter((l) => l.kind === "elided-subject")
+
+    expect(cross.length).toBe(1)
+    expect(cross[0]!.fromParagraph).toBe(1)
+    expect(cross[0]!.toParagraph).toBe(0)
+
+    const from = analysis.paragraphs[1]!.analysis.sentences[cross[0]!.fromSentence]!.tokens[cross[0]!.fromToken]!
+    expect(from.role === "content" && from.tagged.token.text).toBe("Mudei")
+  })
+
+  it("a third-person book claims no narrator continuity", () => {
+    const book = ["---", "language: pt-BR", "character: Rei", "---", "", "@[Rei] chegou tarde."].join("\n")
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.bookLinks).toEqual([])
+  })
+})
+
 describe("a missing dictionary is a typed no-op, never a throw", () => {
   it("returns lexicon-unavailable carrying the language it could not serve", () => {
     const result = analyzeBook("Casa é boa.", NONE)

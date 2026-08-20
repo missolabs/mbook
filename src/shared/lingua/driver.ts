@@ -27,6 +27,8 @@ import { err, ok } from "../result"
 import type { Result } from "../result"
 import { analyzeParagraph } from "./pipeline"
 import type { ParagraphAnalysis } from "./pipeline"
+import { linkAcrossParagraphs } from "./dataflow"
+import type { DiscourseLinkKind, DiscourseProvenance } from "./dataflow"
 import { readLanguage } from "./language"
 import type { Language } from "./language"
 import type { Lexicon } from "./lexicon"
@@ -52,12 +54,27 @@ export type ParagraphSlot = {
   locations: readonly SentenceLocation[]
 }
 
+// A discourse link crossing a paragraph boundary — the block-boundary edges
+// the per-paragraph dataflow pass cannot carry. Both endpoints name their
+// paragraph explicitly.
+export type BookLink = {
+  kind: DiscourseLinkKind
+  fromParagraph: number
+  fromSentence: number
+  fromToken: number
+  toParagraph: number
+  toSentence: number
+  toToken: number
+  provenance: DiscourseProvenance
+}
+
 export type BookAnalysis = {
   language: Language
   cast: Cast
   paragraphs: readonly ParagraphSlot[]
   spans: readonly GlyphSpan[]
   unresolved: readonly string[]
+  bookLinks: readonly BookLink[]
 }
 
 export type BookAnalysisError = { kind: "lexicon-unavailable"; language: Language }
@@ -98,7 +115,41 @@ export function analyzeBook(
     paragraphs,
     spans,
     unresolved: unresolvedNames(spans),
+    bookLinks: crossParagraphLinks(paragraphs, lexicon.value),
   })
+}
+
+// The block-boundary pass: every adjacent paragraph pair runs the
+// cross-paragraph continuity rules, and each returned link is lifted into
+// book coordinates.
+function crossParagraphLinks(paragraphs: readonly ParagraphSlot[], lexicon: Lexicon): readonly BookLink[] {
+  const out: BookLink[] = []
+
+  for (let i = 1; i < paragraphs.length; i++) {
+    const prev = paragraphs[i - 1]!
+    const curr = paragraphs[i]!
+
+    const links = linkAcrossParagraphs(
+      { sentences: prev.analysis.sentences, spans: prev.analysis.spans, syntax: lexicon.syntax },
+      { sentences: curr.analysis.sentences, spans: curr.analysis.spans, syntax: lexicon.syntax },
+      curr.analysis.discourse,
+    )
+
+    for (const link of links) {
+      out.push({
+        kind: link.kind,
+        fromParagraph: curr.index,
+        fromSentence: link.fromSentence,
+        fromToken: link.fromToken,
+        toParagraph: prev.index,
+        toSentence: link.toSentence,
+        toToken: link.toToken,
+        provenance: link.provenance,
+      })
+    }
+  }
+
+  return out
 }
 
 type ParagraphBlock = { fromLine: number; toLine: number }

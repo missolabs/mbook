@@ -30,7 +30,15 @@ import type { AnchoredSpan, Sentence } from "./pipeline"
 import type { SyntaxData, ValencyFrame, ValencyHint } from "./model"
 import type { Relation } from "./binder"
 
-export type DiscourseLinkKind = "elided-object" | "elided-subject"
+export type DiscourseLinkKind =
+  | "elided-object"
+  | "elided-subject"
+  // A referring pronoun bound to its antecedent: `ela` -> the nearest
+  // preceding agreeing nominal, `seu caderno` -> the nearest subject.
+  | "anaphora"
+  // Definiteness chains: `um poço` introduces an entity, a later `o poço`
+  // resumes it — the definite NP links back to its introduction.
+  | "coreference"
 
 export type DiscourseProvenance = "discourse"
 
@@ -96,12 +104,663 @@ export function linkDiscourse(input: DiscourseInput): readonly DiscourseLink[] {
           continue
       }
     }
+
+    linkAnaphors(links, input, si)
+    linkFirstPerson(links, input, si)
+  })
+
+  linkCoreference(links, input)
+
+  return links
+}
+
+// ─── anaphora ────────────────────────────────────────────────────────────────
+// Referring pronouns bound backward. A personal anaphor (`ela`, `she`)
+// demands agreement of its antecedent — a gender/number feat when the
+// nominal carries one, a surface guess (final -a feminine) for bare proper
+// names, nothing for a declared featless anaphor (`they`). A possessive
+// (`seu`, `his`) agrees with the POSSESSED, not the owner, so it skips
+// agreement entirely and takes the nearest preceding subject — the standard
+// centering preference.
+function linkAnaphors(links: DiscourseLink[], input: DiscourseInput, si: number): void {
+  const sentence = input.sentences[si]!
+
+  sentence.tokens.forEach((token, ti) => {
+    switch (token.role) {
+      case "punctuation":
+        return
+      case "content":
+        break
+    }
+
+    const lower = token.tagged.token.text.toLowerCase()
+    const hint = input.syntax.anaphoricPronouns.find((a) => a.form === lower)
+
+    switch (hint !== undefined) {
+      case true: {
+        const antecedent = resolveAgreeing(input, si, ti, hint!.feat)
+
+        switch (antecedent.kind) {
+          case "some":
+            links.push(anaphoraLink(si, ti, antecedent.value))
+            return
+          case "none":
+            return
+        }
+      }
+      case false:
+        break
+    }
+
+    switch (input.syntax.possessivePronouns.includes(lower)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const owner = nearestSubjectAnchor(input, si, ti)
+
+    switch (owner.kind) {
+      case "some":
+        links.push(anaphoraLink(si, ti, owner.value))
+        return
+      case "none":
+        return
+    }
+  })
+}
+
+function anaphoraLink(si: number, ti: number, to: Anchor): DiscourseLink {
+  return {
+    kind: "anaphora",
+    fromSentence: si,
+    fromToken: ti,
+    toSentence: to.sentence,
+    toToken: to.token,
+    provenance: "discourse",
+  }
+}
+
+// The nearest preceding nominal agreeing with the demanded feat — with the
+// centering preference inside each sentence: SUBJECTS first (`Ele` after
+// `Rei olhava o poço em silêncio` is Rei), then other arguments (objects,
+// recipients, obliques), then any nominal chunk head. Nearest sentence wins
+// before role does.
+function resolveAgreeing(input: DiscourseInput, si: number, ti: number, feat: string): Optional<Anchor> {
+  for (let sj = si; sj >= 0; sj--) {
+    const sentence = input.sentences[sj]!
+    const limit = sj === si ? ti : sentence.tokens.length
+
+    for (const tier of [subjectTier, argumentTier, anyTier]) {
+      for (let at = limit - 1; at >= 0; at--) {
+        switch (tier(sentence, at) && agrees(sentence, at, feat)) {
+          case true:
+            return { kind: "some", value: { sentence: sj, token: at } }
+          case false:
+            continue
+        }
+      }
+    }
+  }
+
+  return { kind: "none" }
+}
+
+function subjectTier(sentence: Sentence, at: number): boolean {
+  return (
+    nominalHead(sentence, at) &&
+    sentence.relations.some((r) => r.kind === "subject-of" && r.dependent === at)
+  )
+}
+
+function argumentTier(sentence: Sentence, at: number): boolean {
+  return (
+    nominalHead(sentence, at) &&
+    sentence.relations.some(
+      (r) =>
+        (r.kind === "object-of" || r.kind === "dative-of" || r.kind === "oblique-of") &&
+        r.dependent === at,
+    )
+  )
+}
+
+function anyTier(sentence: Sentence, at: number): boolean {
+  return nominalHead(sentence, at)
+}
+
+function nominalHead(sentence: Sentence, at: number): boolean {
+  const token = sentence.tokens[at]!
+
+  switch (token.role) {
+    case "punctuation":
+      return false
+    case "content":
+      break
+  }
+
+  switch (token.tagged.pos === "NOUN" || token.tagged.pos === "PROPN") {
+    case false:
+      return false
+    case true:
+      return sentence.chunks.some((c) => c.head === at)
+  }
+}
+
+const AGREEMENT_FEAT = /^[mf][sp]/
+
+function agrees(sentence: Sentence, at: number, feat: string): boolean {
+  switch (feat === "") {
+    case true:
+      return true
+    case false:
+      break
+  }
+
+  const token = sentence.tokens[at]!
+
+  switch (token.role) {
+    case "punctuation":
+      return false
+    case "content":
+      break
+  }
+
+  const candidate = token.tagged.feat
+
+  switch (AGREEMENT_FEAT.test(candidate)) {
+    case true:
+      return candidate[0] === feat[0] && candidate[1] === feat[1]
+    case false:
+      break
+  }
+
+  // A capitalized name the dictionary carries no gender for (guessed PROPN,
+  // shape-guessed NOUN — Mizoguchi, Kirie) is gender-UNKNOWN: it matches any
+  // singular pronoun rather than being skipped on a guess. Names with
+  // dictionary gender (Daniela fs) still discriminate above.
+  const nameish =
+    /^[A-ZÀ-Ý]/.test(token.tagged.token.text) &&
+    (token.tagged.pos === "PROPN" || token.tagged.pos === "NOUN")
+
+  switch (nameish) {
+    case false:
+      return false
+    case true:
+      return feat[1] === "s"
+  }
+}
+
+// The nearest preceding subject: the current sentence's last subject-of
+// dependent before the pronoun, else each earlier sentence's last subject.
+function nearestSubjectAnchor(input: DiscourseInput, si: number, ti: number): Optional<Anchor> {
+  const current = input.sentences[si]!
+
+  let best: Optional<number> = { kind: "none" }
+
+  for (const r of current.relations) {
+    switch (r.kind === "subject-of" && r.dependent < ti) {
+      case true:
+        best = { kind: "some", value: r.dependent }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  switch (best.kind) {
+    case "some":
+      return { kind: "some", value: { sentence: si, token: best.value } }
+    case "none":
+      break
+  }
+
+  return resolveSubjectAntecedent(input, si)
+}
+
+// ─── first-person continuity ─────────────────────────────────────────────────
+// A subjectless verb marked 1st person continues the narrator: when an
+// authored first-person mention (`{Eu}[Narrador]`) stands earlier in the
+// paragraph, the verb links to it — one alias glyph then covers the
+// paragraph, instead of one per sentence.
+function linkFirstPerson(links: DiscourseLink[], input: DiscourseInput, si: number): void {
+  const sentence = input.sentences[si]!
+
+  switch (sentence.attribution.kind) {
+    case "narration":
+      break
+    case "speech":
+      return
+    case "written":
+      return
+  }
+
+  for (const chunk of sentence.chunks) {
+    switch (chunk.kind) {
+      case "VP":
+        break
+      case "NP":
+        continue
+      case "PP":
+        continue
+    }
+
+    const feat = featAt(sentence, chunk.head)
+    const firstPerson =
+      input.syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p)) &&
+      feat.includes("1") &&
+      feat.includes("3") === false
+
+    switch (firstPerson) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const subjected = sentence.relations.some((r) => r.kind === "subject-of" && r.head === chunk.head)
+
+    switch (subjected) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    const mention = nearestFirstPersonMention(input, si, chunk.head)
+
+    switch (mention.kind) {
+      case "none":
+        continue
+      case "some":
+        links.push({
+          kind: "elided-subject",
+          fromSentence: si,
+          fromToken: chunk.head,
+          toSentence: mention.value.sentence,
+          toToken: mention.value.token,
+          provenance: "discourse",
+        })
+        continue
+    }
+  }
+}
+
+const FIRST_PERSON_SURFACES = ["eu", "i"]
+
+// The nearest RESOLVED subject-mention whose covered text is a 1st-person
+// pronoun, at or before (si, before) — nearest sentence first, latest token
+// first.
+function nearestFirstPersonMention(input: DiscourseInput, si: number, before: number): Optional<Anchor> {
+  let best: Optional<Anchor> = { kind: "none" }
+
+  for (const anchored of input.spans) {
+    const anchor = firstPersonMentionAnchor(input, anchored)
+
+    switch (anchor.kind) {
+      case "none":
+        continue
+      case "some":
+        break
+    }
+
+    const at = anchor.value
+
+    const precedes = at.sentence < si || (at.sentence === si && at.token < before)
+
+    switch (precedes) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    switch (best.kind === "none" || laterAnchor(at, (best as { value: Anchor }).value)) {
+      case true:
+        best = { kind: "some", value: at }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
+}
+
+function laterAnchor(a: Anchor, b: Anchor): boolean {
+  switch (a.sentence === b.sentence) {
+    case true:
+      return a.token > b.token
+    case false:
+      return a.sentence > b.sentence
+  }
+}
+
+function firstPersonMentionAnchor(input: DiscourseInput, anchored: AnchoredSpan): Optional<Anchor> {
+  switch (anchored.span.kind === "subject-mention" && anchored.span.binding.kind === "resolved") {
+    case false:
+      return { kind: "none" }
+    case true:
+      break
+  }
+
+  switch (anchored.anchor.kind) {
+    case "detached":
+      return { kind: "none" }
+    case "in-sentence":
+      break
+  }
+
+  const sentence = input.sentences[anchored.anchor.sentence]
+  const token = anchored.anchor.tokens[0]
+
+  switch (sentence === undefined || token === undefined) {
+    case true:
+      return { kind: "none" }
+    case false:
+      break
+  }
+
+  const covered = sentence!.tokens[token!]!
+
+  switch (covered.role) {
+    case "punctuation":
+      return { kind: "none" }
+    case "content":
+      break
+  }
+
+  switch (FIRST_PERSON_SURFACES.includes(covered.tagged.token.text.toLowerCase())) {
+    case false:
+      return { kind: "none" }
+    case true:
+      return { kind: "some", value: { sentence: anchored.anchor.sentence, token: token! } }
+  }
+}
+
+// ─── coreference ─────────────────────────────────────────────────────────────
+// Definiteness chains, paragraph-local: an NP opening on an indefinite
+// article INTRODUCES its head lemma; a later NP opening on a definite article
+// with the same head lemma RESUMES it. `Havia um poço no quintal. O poço
+// estava seco.` — one well.
+function linkCoreference(links: DiscourseLink[], input: DiscourseInput): void {
+  const introduced = new Map<string, Anchor>()
+
+  input.sentences.forEach((sentence, si) => {
+    for (const chunk of sentence.chunks) {
+      switch (chunk.kind) {
+        case "NP":
+          break
+        case "VP":
+          continue
+        case "PP":
+          continue
+      }
+
+      const opener = sentence.tokens[chunk.from]!
+
+      switch (opener.role) {
+        case "punctuation":
+          continue
+        case "content":
+          break
+      }
+
+      const head = sentence.tokens[chunk.head]!
+
+      switch (head.role === "content" && head.tagged.pos === "NOUN") {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      const article = opener.tagged.token.text.toLowerCase()
+      const lemma = (head as { tagged: { lemma: string } }).tagged.lemma
+
+      switch (input.syntax.indefiniteArticles.includes(article)) {
+        case true:
+          introduced.set(lemma, { sentence: si, token: chunk.head })
+          continue
+        case false:
+          break
+      }
+
+      switch (input.syntax.definiteArticles.includes(article) && introduced.has(lemma)) {
+        case true: {
+          const to = introduced.get(lemma)!
+
+          links.push({
+            kind: "coreference",
+            fromSentence: si,
+            fromToken: chunk.head,
+            toSentence: to.sentence,
+            toToken: to.token,
+            provenance: "discourse",
+          })
+          continue
+        }
+        case false:
+          continue
+      }
+    }
+  })
+}
+
+type Anchor = { sentence: number; token: number }
+
+// ─── cross-paragraph continuity ──────────────────────────────────────────────
+// The paragraph is the basic block; this is the block-boundary pass the
+// driver runs over ADJACENT paragraph pairs. Deliberately narrower than the
+// in-paragraph rules: only the new paragraph's FIRST sentence continues
+// subjects, objects and pronouns backward (a paragraph break is a discourse
+// boundary, and reaching deeper than its opening sentence is guesswork) —
+// except the narrator: a 1st-person verb anywhere continues the nearest
+// `{Eu}`-style mention of the PREVIOUS paragraph when its own has none, so
+// one alias glyph covers the paragraphs that follow it. Returned links'
+// `toSentence`/`toToken` index into the PREVIOUS paragraph; `claimed` is the
+// current paragraph's own discourse output, so nothing resolved locally is
+// re-resolved across the boundary.
+export function linkAcrossParagraphs(
+  prev: DiscourseInput,
+  curr: DiscourseInput,
+  claimed: readonly DiscourseLink[],
+): readonly DiscourseLink[] {
+  const links: DiscourseLink[] = []
+  const first = curr.sentences[0]
+
+  switch (first === undefined || prev.sentences.length === 0) {
+    case true:
+      return links
+    case false:
+      break
+  }
+
+  const taken = (kind: DiscourseLinkKind, si: number, ti: number): boolean =>
+    hasLink(claimed, kind, si, ti) || hasLink(links, kind, si, ti)
+
+  const continuity = subjectlessThirdVerbs(first!, curr.syntax)
+
+  switch (continuity.length === 1 && subjectlessVpCount(first!) === 1) {
+    case true: {
+      const verb = continuity[0]!
+
+      switch (taken("elided-subject", 0, verb)) {
+        case true:
+          break
+        case false: {
+          const antecedent = resolveSubjectAntecedent(prev, prev.sentences.length)
+
+          switch (antecedent.kind) {
+            case "some":
+              links.push({
+                kind: "elided-subject",
+                fromSentence: 0,
+                fromToken: verb,
+                toSentence: antecedent.value.sentence,
+                toToken: antecedent.value.token,
+                provenance: "discourse",
+              })
+              break
+            case "none":
+              break
+          }
+        }
+      }
+      break
+    }
+    case false:
+      break
+  }
+
+  for (const verb of objectlessTransitiveVerbs(first!, curr.syntax)) {
+    switch (taken("elided-object", 0, verb)) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    const antecedent = crossAntecedent(prev)
+
+    switch (antecedent.kind) {
+      case "none":
+        continue
+      case "some":
+        links.push({
+          kind: "elided-object",
+          fromSentence: 0,
+          fromToken: verb,
+          toSentence: antecedent.value.sentence,
+          toToken: antecedent.value.token,
+          provenance: "discourse",
+        })
+        continue
+    }
+  }
+
+  first!.tokens.forEach((token, ti) => {
+    switch (token.role) {
+      case "punctuation":
+        return
+      case "content":
+        break
+    }
+
+    const hint = curr.syntax.anaphoricPronouns.find((a) => a.form === token.tagged.token.text.toLowerCase())
+
+    switch (hint === undefined || taken("anaphora", 0, ti)) {
+      case true:
+        return
+      case false:
+        break
+    }
+
+    const last = prev.sentences.length - 1
+    const antecedent = resolveAgreeing(prev, last, prev.sentences[last]!.tokens.length, hint!.feat)
+
+    switch (antecedent.kind) {
+      case "some":
+        links.push(anaphoraLink(0, ti, antecedent.value))
+        return
+      case "none":
+        return
+    }
+  })
+
+  curr.sentences.forEach((sentence, si) => {
+    switch (sentence.attribution.kind) {
+      case "narration":
+        break
+      case "speech":
+        return
+      case "written":
+        return
+    }
+
+    for (const chunk of sentence.chunks) {
+      switch (chunk.kind) {
+        case "VP":
+          break
+        case "NP":
+          continue
+        case "PP":
+          continue
+      }
+
+      const feat = featAt(sentence, chunk.head)
+      const firstPerson =
+        curr.syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p)) &&
+        feat.includes("1") &&
+        feat.includes("3") === false
+
+      const subjected = sentence.relations.some((r) => r.kind === "subject-of" && r.head === chunk.head)
+
+      const local = nearestFirstPersonMention(curr, si, chunk.head)
+
+      const continues =
+        firstPerson && subjected === false && local.kind === "none" && taken("elided-subject", si, chunk.head) === false
+
+      switch (continues) {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      const mention = nearestFirstPersonMention(prev, prev.sentences.length, 0)
+
+      switch (mention.kind) {
+        case "none":
+          continue
+        case "some":
+          links.push({
+            kind: "elided-subject",
+            fromSentence: si,
+            fromToken: chunk.head,
+            toSentence: mention.value.sentence,
+            toToken: mention.value.token,
+            provenance: "discourse",
+          })
+          continue
+      }
+    }
   })
 
   return links
 }
 
-type Anchor = { sentence: number; token: number }
+function hasLink(all: readonly DiscourseLink[], kind: DiscourseLinkKind, si: number, ti: number): boolean {
+  return all.some((l) => l.kind === kind && l.fromSentence === si && l.fromToken === ti)
+}
+
+// The previous paragraph's freshest referent: its last sentence's last
+// object, else subject, walking backward.
+function crossAntecedent(prev: DiscourseInput): Optional<Anchor> {
+  for (let sj = prev.sentences.length - 1; sj >= 0; sj--) {
+    const sentence = prev.sentences[sj]!
+
+    const object = lastDependent(sentence, "object-of")
+
+    switch (object.kind) {
+      case "some":
+        return { kind: "some", value: { sentence: sj, token: object.value } }
+      case "none":
+        break
+    }
+
+    const subject = lastDependent(sentence, "subject-of")
+
+    switch (subject.kind) {
+      case "none":
+        continue
+      case "some":
+        return { kind: "some", value: { sentence: sj, token: subject.value } }
+    }
+  }
+
+  return { kind: "none" }
+}
 
 // Pro-drop subject continuity: a finite, third-person-compatible verb with no
 // subject of its own continues the subject already on stage — "Rei chegou.

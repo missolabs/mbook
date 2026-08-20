@@ -179,8 +179,9 @@ describe("BookAnalysis -> relational rows", () => {
     const link = rows.discourseLinks[0]!
 
     expect(link).toMatchObject({
-      paragraphIdx: 1,
+      fromParagraphIdx: 1,
       fromSentenceIdx: 1,
+      toParagraphIdx: 1,
       toSentenceIdx: 0,
       kind: "elided-object",
       provenance: "discourse",
