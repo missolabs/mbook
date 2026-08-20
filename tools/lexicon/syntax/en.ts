@@ -201,6 +201,15 @@ export const EN_SYNTAX: SyntaxData = {
   passiveAuxiliaries: ["be"],
   agentMarkers: ["by"],
   expletives: ["there"],
+  // Verbs of saying: the dialogue-tag inversion (`"...," said Holmes`). Same
+  // curation bias as Portuguese — verbs that take a person as OBJECT stay out
+  // (`observed Mary` watches her at least as often as it quotes her, so
+  // `observe` is absent despite its Victorian dialogue-tag pedigree).
+  dicendi: [
+    "say", "ask", "reply", "answer", "whisper", "murmur", "mutter", "shout",
+    "cry", "exclaim", "insist", "repeat", "argue", "add", "continue",
+    "conclude", "remark", "sigh", "groan", "wonder", "think",
+  ],
   // AGID/Moby codes: PAST, 3SG and FIN are finite ("PAST" also prefixes
   // PASTPART — an accepted over-match, since a participle-only homograph with a
   // noun reading is vanishingly rare). The English infinitive is the bare base

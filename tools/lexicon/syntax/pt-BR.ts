@@ -239,6 +239,18 @@ export const PT_BR_SYNTAX: SyntaxData = {
   // Portuguese existentials need no dummy subject (pro-drop) — the inversion
   // is licensed by the presentational frame instead, so no expletives exist.
   expletives: [],
+  // Verbs of saying: dialogue attribution puts the sayer AFTER them ("— Não
+  // ligue, disse Rei", "argumentava Daniela"), the standard literary form.
+  // Curated to verbs whose postverbal person is near-certainly the inverted
+  // speaker: perception/contact verbs that take a person as OBJECT (ver,
+  // observar, interromper, chamar) are deliberately absent.
+  dicendi: [
+    "dizer", "falar", "perguntar", "responder", "retrucar", "replicar",
+    "exclamar", "gritar", "berrar", "murmurar", "sussurrar", "resmungar",
+    "gemer", "suspirar", "insistir", "repetir", "argumentar", "afirmar",
+    "comentar", "explicar", "acrescentar", "concluir", "ponderar", "indagar",
+    "pensar", "refletir",
+  ],
   // DELAF tense letters: P/I/J/F/Q presente..mais-que-perfeito, C condicional,
   // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio.
   // G gerúndio is none of the three classes and stays unlisted.

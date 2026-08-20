@@ -534,3 +534,64 @@ describe("coordination: a conjoined verb inherits the clause subject", () => {
     expect(relation(sentence, "object-of", "verdade", "disse")).toBeDefined()
   })
 })
+
+describe("dialogue attribution: the sayer stands after the verb", () => {
+  it("inverts the attribution tail — the postverbal name is the subject, not what was said", () => {
+    const analysis = analyze("Um dos meus maiores defeitos era ligar para as pessoas, dizia Kirie.")
+
+    expect(analysis.sentences.length).toBe(1)
+
+    const sentence = analysis.sentences[0]!
+
+    expect(dependentsOf(sentence, "subject-of", "dizia")).toEqual(["Kirie"])
+    expect(dependentsOf(sentence, "object-of", "dizia")).toEqual([])
+
+    // The quote IS the content: an inverted dicendi verb elides nothing.
+    expect(analysis.discourse).toEqual([])
+  })
+
+  it("sees through a free relative to the inverted sayer", () => {
+    const sentence = only("Ao menos era o que argumentava Kirie.")
+
+    expect(dependentsOf(sentence, "subject-of", "argumentava")).toEqual(["Kirie"])
+    expect(dependentsOf(sentence, "object-of", "argumentava")).toEqual([])
+  })
+
+  it("leaves the plain SVO reading alone — a clause-mate subject blocks the inversion", () => {
+    const sentence = only("Kumiko dizia mentiras naquela noite.")
+
+    expect(dependentsOf(sentence, "subject-of", "dizia")).toEqual(["Kumiko"])
+    expect(relation(sentence, "object-of", "mentiras", "dizia")).toBeDefined()
+  })
+
+  it("never steals a name out of an embedded clause — the complementizer wins", () => {
+    const sentence = only("Mizoguchi disse que Kirie partiu.")
+
+    expect(dependentsOf(sentence, "subject-of", "disse")).toEqual(["Mizoguchi"])
+    expect(relation(sentence, "complement-of", "que", "disse")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "partiu")).toEqual(["Kirie"])
+  })
+})
+
+describe("the passive agent who is a bare name", () => {
+  it("binds por + proper noun to a passive participle as its agent, not its object", () => {
+    const sentence = only("A estima não era compartilhada por Kirie.")
+
+    expect(relation(sentence, "agent-of", "Kirie", "compartilhada")).toBeDefined()
+    expect(dependentsOf(sentence, "object-of", "compartilhada")).toEqual([])
+  })
+
+  it("keeps the appositive nominal a noun — the subject-verb bigram dies at the comma", () => {
+    const sentence = only("Eu tinha certa estima por S, coisa que não era compartilhada por Kirie.")
+
+    expect(tagged(sentence, "coisa").pos).toBe("NOUN")
+    expect(relation(sentence, "agent-of", "Kirie", "compartilhada")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "compartilhada")).toEqual(["coisa"])
+  })
+
+  it("keeps the com-companion an object — only agent markers reroute", () => {
+    const sentence = only("Encontrei com Kirie no mercado.")
+
+    expect(relation(sentence, "object-of", "Kirie", "Encontrei")).toBeDefined()
+  })
+})

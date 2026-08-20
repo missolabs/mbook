@@ -331,3 +331,19 @@ describe("dialogue: attribution tails never split the sentence", () => {
     expect(dependentsOf(sentence, "subject-of", "wrote")).toEqual(["he"])
   })
 })
+
+describe("dialogue attribution: said Kumiko", () => {
+  it("inverts the tag — the name after the verb of saying is its subject, never its object", () => {
+    const sentence = only("“You are wrong,” said Kumiko.")
+
+    expect(dependentsOf(sentence, "subject-of", "said")).toEqual(["Kumiko"])
+    expect(dependentsOf(sentence, "object-of", "said")).toEqual([])
+  })
+
+  it("leaves plain SVO alone — a clause-mate subject blocks the inversion", () => {
+    const sentence = only("Kumiko said nothing.")
+
+    expect(dependentsOf(sentence, "subject-of", "said")).toEqual(["Kumiko"])
+    expect(relation(sentence, "object-of", "nothing", "said")).toBeDefined()
+  })
+})

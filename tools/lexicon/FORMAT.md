@@ -52,7 +52,7 @@ mirror of this document. `tools/lexicon/format/encode.ts` is the writer.
 | field         | type      | value / meaning                          |
 |---------------|-----------|------------------------------------------|
 | magic         | u8[4]     | `4D 42 4C 58` = ASCII `"MBLX"`           |
-| version       | u32       | `3`                                      |
+| version       | u32       | `4`                                      |
 | langLen       | u8        | byte length of `lang`                    |
 | lang          | u8[langLen] | UTF-8 language tag (`"pt-BR"`, `"en"`)  |
 | variantScheme | u8        | `VariantScheme`                          |
@@ -166,6 +166,8 @@ object (not a packed table). Schema (`SyntaxData` in `format/model.ts`):
   "passiveAuxiliaries": ["be"], // lemmas that head the passive periphrasis (aux + participle)
   "agentMarkers": ["by"],       // adposition surface forms introducing a passive agent PP
   "expletives": ["there"],      // existential dummies licensing a postverbal copular subject
+  "dicendi": ["say"],           // verb-of-saying lemmas: attribution inverts around them
+                                // ("said Holmes"), a postverbal proper noun is the SUBJECT
   "verbFeats": {                // morphology-code prefixes, in this dict's feat vocabulary
     "finitePrefixes":     ["..."],
     "infinitivePrefixes": ["..."],
@@ -185,7 +187,7 @@ A reader may verify the trailer as an integrity/truncation check.
 
 ## Lookup algorithm (reference)
 
-1. Verify header magic and `version == 3`; read metadata.
+1. Verify header magic and `version == 4`; read metadata.
 2. Load the offset tables (sections 3–4) and keep `entriesBase` and the two
    pools addressable.
 3. `lookup(form)`: UTF-8-encode `form`; binary-search `formOffsets`/`formBlob`
@@ -207,6 +209,7 @@ appended, never renumbered.
 History: v2 grew the syntax JSON schema (`relativePronouns`,
 `passiveAuxiliaries`, `agentMarkers`, `expletives`,
 `verbFeats.participlePrefixes`); v3 added `relativePlaceAdverbs` and
-`genitiveMarkers`. The binary layout is unchanged since v1, but the schema is
+`genitiveMarkers`; v4 added `dicendi` (verb-of-saying lemmas for quotative
+inversion). The binary layout is unchanged since v1, but the schema is
 part of the reader contract — an engine handed an older dict would read
 `undefined` where it expects those lists — so the version gates it.

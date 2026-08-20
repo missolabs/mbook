@@ -74,6 +74,7 @@ export function bind(input: RelationInput): readonly Relation[] {
     switch (chunk.kind) {
       case "VP":
         addSubject(relations, input, ci, pinnedSubjects)
+        addQuotativeInversion(relations, input, ci, pinnedSubjects)
         addComplementOrObject(relations, input, ci, pinnedSubjects)
         addRelativeObject(relations, input, ci)
         addPredicate(relations, input, ci, pinnedSubjects)
@@ -324,6 +325,109 @@ function isRelativePronoun(token: AnalyzedToken, relativePronouns: readonly stri
   }
 }
 
+// Quotative inversion: dialogue attribution puts the sayer AFTER the verb —
+// `— Não ligue, disse Rei`, `"You're wrong," said Holmes`, `era o que
+// argumentava Rei`. For a VP whose lemma is a declared verb of saying, a
+// proper-noun NP starting EXACTLY at the verb's right edge (parentheticals
+// hopped) is the inverted SUBJECT, never an object: what a dicendi verb says
+// is a clause, and the person beside it is who says it. Three stand-downs
+// keep the plain SVO reading safe:
+//   * a pinned subject outranks the inversion outright;
+//   * a clause-mate subject NP directly abutting the verb (`Holmes said`,
+//     `Kumiko dizia mentiras`) means no inversion happened — only a bare
+//     relative pronoun there is transparent (`o que argumentava Rei`, where
+//     `que` is the free relative, not the sayer);
+//   * the adjacency requirement keeps embedded names out — `disse que Rei
+//     partiu` opens on the complementizer, not on the name.
+// The earlier heuristic subject guess for the verb — usually a noun fished
+// out of the quoted clause across a comma — is replaced, not doubled.
+function addQuotativeInversion(relations: Relation[], input: RelationInput, ci: number, pins: Pins): void {
+  const vp = input.chunks[ci]!
+
+  switch (input.syntax.dicendi.includes(verbLemma(input.tokens, vp))) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  switch (pins.get(ci) === undefined) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  switch (clauseMateSubjectBefore(input, ci)) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const start = afterParentheticals(input.tokens, vp.to)
+  const candidate = firstChunkFrom(input.chunks, start)
+
+  switch (candidate.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const chunk = input.chunks[candidate.value]!
+
+  switch (chunk.kind === "NP" && chunk.from === start) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const head = input.tokens[chunk.head]!
+
+  switch (head.role === "content" && head.tagged.pos === "PROPN") {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  for (let at = relations.length - 1; at >= 0; at--) {
+    const existing = relations[at]!
+
+    switch (existing.kind === "subject-of" && existing.head === vp.head) {
+      case true:
+        relations.splice(at, 1)
+        continue
+      case false:
+        continue
+    }
+  }
+
+  relations.push(relation("subject-of", chunk.head, vp.head, "heuristic"))
+}
+
+// An NP ending exactly where this VP starts — the preverbal subject of a
+// plain SVO clause. A bare relative pronoun there does not count: it stands
+// for an antecedent, not for a sayer sitting before the verb.
+function clauseMateSubjectBefore(input: RelationInput, ci: number): boolean {
+  const vp = input.chunks[ci]!
+  const np = input.chunks.find((c) => c.kind === "NP" && c.to === vp.from)
+
+  switch (np === undefined) {
+    case true:
+      return false
+    case false:
+      break
+  }
+
+  const bareRelative =
+    np!.to - np!.from === 1 && isRelativePronoun(input.tokens[np!.head]!, input.syntax.relativePronouns)
+
+  return bareRelative === false
+}
+
 // What the verb takes, looked for to its right past any parentheticals: the
 // declared complementizer opens a clausal complement, and only failing that is
 // an NP read as the direct object — the two are exclusive, since material after
@@ -370,6 +474,31 @@ function addObject(relations: Relation[], input: RelationInput, ci: number, star
       break
   }
 
+  // The inverted subject the quotative rule already claimed (`dizia Rei`) is
+  // never doubled up as the verb's object.
+  const claimedSubject = relations.some(
+    (r) => r.kind === "subject-of" && r.head === input.chunks[ci]!.head && r.dependent === chunk.head,
+  )
+
+  switch (claimedSubject) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  // An agent-marker adposition on the way to the candidate hands a passive
+  // participle its agent (`não era compartilhada por Rei`), not an object.
+  // Only a bare proper noun lands here: the common-noun shape (`pelo gato`)
+  // chunks as a PP and takes the PP attachment route instead.
+  switch (chunk.kind === "NP" && agentMarkerBetween(input, start, chunk.from) && isPassiveParticipleVp(input, ci)) {
+    case true:
+      relations.push(relation("agent-of", chunk.head, input.chunks[ci]!.head, "heuristic"))
+      return
+    case false:
+      break
+  }
+
   // A post-verbal NP that is this verb's pinned subject is the subject, not the
   // object, so it is never doubled up as an object.
   switch (chunk.kind === "NP" && pins.get(ci) !== candidate.value) {
@@ -379,6 +508,29 @@ function addObject(relations: Relation[], input: RelationInput, ci: number, star
     case false:
       return
   }
+}
+
+// A declared agent-marker adposition among the content tokens of [from, to).
+function agentMarkerBetween(input: RelationInput, from: number, to: number): boolean {
+  for (let at = from; at < to; at++) {
+    const token = input.tokens[at]!
+
+    switch (token.role) {
+      case "punctuation":
+        continue
+      case "content":
+        break
+    }
+
+    switch (input.syntax.agentMarkers.includes(token.tagged.token.text.toLowerCase())) {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  return false
 }
 
 // What a copular verb equates its subject with: the first postverbal NP head

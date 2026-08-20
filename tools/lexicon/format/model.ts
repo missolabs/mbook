@@ -96,6 +96,7 @@ export type SyntaxData = {
   passiveAuxiliaries: string[]
   agentMarkers: string[]
   expletives: string[]
+  dicendi: string[]
   verbFeats: VerbFeatMarks
 }
 

@@ -271,7 +271,10 @@ function objectlessTransitiveVerbs(sentence: Sentence, syntax: SyntaxData): read
     const expects = expectsObject(lemmaAt(sentence, chunk.head), syntax.valency)
     const found = sentence.relations.some((r) => claimsObject(r, chunk.head))
 
-    switch (expects && found === false && isPassiveParticiple(sentence, chunk.head, syntax) === false) {
+    const excused =
+      isPassiveParticiple(sentence, chunk.head, syntax) || invertedQuotative(sentence, chunk.head, syntax)
+
+    switch (expects && found === false && excused === false) {
       case true:
         out.push(chunk.head)
         continue
@@ -281,6 +284,20 @@ function objectlessTransitiveVerbs(sentence: Sentence, syntax: SyntaxData): read
   }
 
   return out
+}
+
+// An inverted attribution (`..., dizia Rei`) quotes, it does not elide: the
+// dicendi verb's content is the quoted matrix clause itself, so a verb of
+// saying whose subject stands AFTER it claims no discourse antecedent.
+function invertedQuotative(sentence: Sentence, head: number, syntax: SyntaxData): boolean {
+  switch (syntax.dicendi.includes(lemmaAt(sentence, head))) {
+    case false:
+      return false
+    case true:
+      break
+  }
+
+  return sentence.relations.some((r) => r.kind === "subject-of" && r.head === head && r.dependent > head)
 }
 
 // This verb is a participle chained (complement-of) onto a passive auxiliary.

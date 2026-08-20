@@ -98,6 +98,9 @@ export type SyntaxData = {
   passiveAuxiliaries: string[]
   agentMarkers: string[]
   expletives: string[]
+  // Verb-of-saying lemmas: dialogue attribution inverts around these
+  // (`disse Rei`, `said Holmes`), so a postverbal proper noun is their subject.
+  dicendi: string[]
   verbFeats: VerbFeatMarks
 }
 

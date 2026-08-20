@@ -51,7 +51,11 @@ export type TagInput = {
   syntax: SyntaxData
 }
 
-type PrevPos = { kind: "none" } | { kind: "pos"; pos: Pos; feat: string }
+// `boundary` records clause punctuation (comma, dash, terminal — quotes are
+// typesetting and stay transparent) between that content token and the
+// current one: bigram rules that model SUBJECT-VERB adjacency must not fire
+// across it (`por S, coisa` — S is not coisa's clause-mate subject).
+type PrevPos = { kind: "none" } | { kind: "pos"; pos: Pos; feat: string; boundary: boolean }
 
 type Closed = {
   det: Set<string>
@@ -77,11 +81,24 @@ export function tagSentence(input: TagInput): readonly AnalyzedToken[] {
         // must casefold `Um` back to the article, exactly as at a sentence
         // start.
         afterOpeningQuote = isOpeningQuote(token.text)
+        switch (prev.kind) {
+          case "none":
+            break
+          case "pos":
+            switch (isQuoteMark(token.text)) {
+              case true:
+                break
+              case false:
+                prev = { kind: "pos", pos: prev.pos, feat: prev.feat, boundary: true }
+                break
+            }
+            break
+        }
         break
       case "number": {
         const tagged: TaggedToken = { token, lemma: token.text, pos: "NUM", feat: "", provenance: "shape-guess" }
         out.push({ role: "content", tagged })
-        prev = { kind: "pos", pos: "NUM", feat: "" }
+        prev = { kind: "pos", pos: "NUM", feat: "", boundary: false }
         seenContent = true
         afterOpeningQuote = false
         break
@@ -89,7 +106,7 @@ export function tagSentence(input: TagInput): readonly AnalyzedToken[] {
       case "word": {
         const tagged = tagWord(token, seenContent === false || afterOpeningQuote, prev, input, closed)
         out.push({ role: "content", tagged })
-        prev = { kind: "pos", pos: tagged.pos, feat: tagged.feat }
+        prev = { kind: "pos", pos: tagged.pos, feat: tagged.feat, boundary: false }
         seenContent = true
         afterOpeningQuote = false
         break
@@ -149,6 +166,29 @@ function isOpeningQuote(text: string): boolean {
     case "\"":
       return true
     case "‘":
+      return true
+    default:
+      return false
+  }
+}
+
+// Quote marks typeset, they don't segment: only every OTHER mark is a clause
+// boundary for the bigram window.
+function isQuoteMark(text: string): boolean {
+  switch (text) {
+    case "“":
+      return true
+    case "”":
+      return true
+    case "\"":
+      return true
+    case "‘":
+      return true
+    case "’":
+      return true
+    case "«":
+      return true
+    case "»":
       return true
     default:
       return false
@@ -291,12 +331,21 @@ type Person = "any" | "third"
 // (`vazio` ms), never English's featless junk ADJ readings (`brother`).
 type FeatDemand = "any" | "marked"
 
+// "clause-mate" demands no clause punctuation between neighbour and word:
+// the nominal-subject-governs-finite-verb rules model SUBJECT VERB adjacency,
+// and across a comma the nominal is another clause's material (`estima por
+// S, coisa...` must not read `coisa` as a verb S governs). Every other rule
+// keeps firing across marks ("any") — adverb chains and adjective lists
+// legitimately ride commas.
+type BondDemand = "any" | "clause-mate"
+
 type ContextRule = {
   prev: Pos
   prefer: Pos
   form: FormClass
   person: Person
   feat: FeatDemand
+  bond: BondDemand
 }
 
 // The contextual bigram rules, tried top-down among those matching the
@@ -322,21 +371,21 @@ type ContextRule = {
 // that reveals a negated/adverb-fronted verb (`não sabia`, `did not see` —
 // `see` would otherwise fall to its noun reading).
 const CONTEXT_RULES: readonly ContextRule[] = [
-  { prev: "DET", prefer: "NOUN", form: "any", person: "any", feat: "any" },
-  { prev: "ADP", prefer: "VERB", form: "infinitive", person: "any", feat: "any" },
-  { prev: "ADP", prefer: "NOUN", form: "any", person: "any", feat: "any" },
-  { prev: "PRON", prefer: "VERB", form: "infinitive", person: "any", feat: "any" },
-  { prev: "PRON", prefer: "VERB", form: "any", person: "any", feat: "any" },
-  { prev: "NOUN", prefer: "VERB", form: "finite", person: "third", feat: "any" },
-  { prev: "NOUN", prefer: "ADJ", form: "any", person: "any", feat: "marked" },
-  { prev: "PROPN", prefer: "VERB", form: "finite", person: "third", feat: "any" },
-  { prev: "VERB", prefer: "VERB", form: "infinitive", person: "any", feat: "any" },
-  { prev: "AUX", prefer: "VERB", form: "infinitive", person: "any", feat: "any" },
-  { prev: "VERB", prefer: "VERB", form: "participle", person: "any", feat: "any" },
-  { prev: "AUX", prefer: "VERB", form: "participle", person: "any", feat: "any" },
-  { prev: "VERB", prefer: "ADV", form: "any", person: "any", feat: "any" },
-  { prev: "ADV", prefer: "ADV", form: "any", person: "any", feat: "any" },
-  { prev: "ADV", prefer: "VERB", form: "any", person: "any", feat: "any" },
+  { prev: "DET", prefer: "NOUN", form: "any", person: "any", feat: "any", bond: "any" },
+  { prev: "ADP", prefer: "VERB", form: "infinitive", person: "any", feat: "any", bond: "any" },
+  { prev: "ADP", prefer: "NOUN", form: "any", person: "any", feat: "any", bond: "any" },
+  { prev: "PRON", prefer: "VERB", form: "infinitive", person: "any", feat: "any", bond: "any" },
+  { prev: "PRON", prefer: "VERB", form: "any", person: "any", feat: "any", bond: "clause-mate" },
+  { prev: "NOUN", prefer: "VERB", form: "finite", person: "third", feat: "any", bond: "clause-mate" },
+  { prev: "NOUN", prefer: "ADJ", form: "any", person: "any", feat: "marked", bond: "any" },
+  { prev: "PROPN", prefer: "VERB", form: "finite", person: "third", feat: "any", bond: "clause-mate" },
+  { prev: "VERB", prefer: "VERB", form: "infinitive", person: "any", feat: "any", bond: "any" },
+  { prev: "AUX", prefer: "VERB", form: "infinitive", person: "any", feat: "any", bond: "any" },
+  { prev: "VERB", prefer: "VERB", form: "participle", person: "any", feat: "any", bond: "any" },
+  { prev: "AUX", prefer: "VERB", form: "participle", person: "any", feat: "any", bond: "any" },
+  { prev: "VERB", prefer: "ADV", form: "any", person: "any", feat: "any", bond: "any" },
+  { prev: "ADV", prefer: "ADV", form: "any", person: "any", feat: "any", bond: "any" },
+  { prev: "ADV", prefer: "VERB", form: "any", person: "any", feat: "any", bond: "any" },
 ]
 
 function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: SyntaxData): Entry {
@@ -361,6 +410,13 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
       case false:
         continue
       case true:
+        break
+    }
+
+    switch (rule.bond === "clause-mate" && prev.boundary) {
+      case true:
+        continue
+      case false:
         break
     }
 
