@@ -35,6 +35,8 @@ export const PT_BR_SYNTAX: SyntaxData = {
       "do", "da", "dos", "das", "no", "na", "nos", "nas", "ao", "à", "aos",
       "às", "pelo", "pela", "pelos", "pelas", "num", "numa", "dum", "duma",
       "deste", "desta", "nesse", "nessa", "àquele", "àquela", "dele", "dela",
+      "neste", "nesta", "naquele", "naquela", "naquilo", "nisso", "nisto",
+      "daquele", "daquela", "desse", "dessa", "disso", "disto", "daquilo",
     ],
     conjunctions: [
       "e", "ou", "mas", "porém", "contudo", "todavia", "entretanto", "porque",
@@ -80,6 +82,8 @@ export const PT_BR_SYNTAX: SyntaxData = {
     { suffix: "inho", pos: "NOUN" },
     { suffix: "inha", pos: "NOUN" },
     { suffix: "mente", pos: "ADV" },
+    { suffix: "íssimo", pos: "ADJ" },
+    { suffix: "íssima", pos: "ADJ" },
     { suffix: "oso", pos: "ADJ" },
     { suffix: "osa", pos: "ADJ" },
     { suffix: "ável", pos: "ADJ" },
@@ -251,12 +255,57 @@ export const PT_BR_SYNTAX: SyntaxData = {
     "comentar", "explicar", "acrescentar", "concluir", "ponderar", "indagar",
     "pensar", "refletir",
   ],
+  // `para` covers the analytic dative ("deu o livro para Maria"); the a-family
+  // contractions cover the classical one ("entregou o caderno ao sacerdote").
+  dativeMarkers: ["a", "ao", "à", "aos", "às", "para"],
+  // Only the words that negate the VERB they precede; `sem` negates its own
+  // PP/infinitive and stays out.
+  negators: ["não", "nunca", "jamais", "nem"],
+  anaphoricPronouns: [
+    { form: "ele", feat: "ms" },
+    { form: "ela", feat: "fs" },
+    { form: "eles", feat: "mp" },
+    { form: "elas", feat: "fp" },
+  ],
+  possessivePronouns: ["seu", "sua", "seus", "suas"],
+  // The unambiguous proclitic/enclitic object pronouns plus the enclitic
+  // allomorphs the hyphen split produces. Bare `o/a/os/as` are deliberately
+  // absent: as proclitics they are surface-identical to the articles and the
+  // article reading dominates prose.
+  accusativeClitics: ["me", "te", "nos", "vos", "lo", "la", "los", "las"],
+  dativeClitics: ["me", "te", "lhe", "nos", "vos", "lhes"],
+  reflexiveClitics: ["se"],
+  // All already in the closed conjunction list; this list marks which of them
+  // open an ADVERBIAL clause that attaches to the matrix verb. `se` is
+  // conditional here and reflexive above — the binder disambiguates by
+  // position (a clitic `se` rides directly against its verb).
+  subordinators: ["quando", "enquanto", "porque", "embora", "caso", "conforme", "mal", "se"],
+  possessiveRelatives: ["cujo", "cuja", "cujos", "cujas"],
+  definiteArticles: ["o", "a", "os", "as"],
+  indefiniteArticles: ["um", "uma", "uns", "umas"],
+  temporalNouns: [
+    "noite", "dia", "manhã", "tarde", "madrugada", "momento", "instante",
+    "hora", "vez", "tempo", "ano", "mês", "semana", "verão", "inverno",
+    "primavera", "outono", "véspera", "infância", "domingo", "sábado",
+  ],
+  // Portuguese has no verb-particle construction.
+  particles: [],
+  degreeAdverbs: ["mais", "menos", "tão"],
+  // `do que` reaches the standard through the `que` after the contraction.
+  thanMarkers: ["que"],
   // DELAF tense letters: P/I/J/F/Q presente..mais-que-perfeito, C condicional,
-  // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio.
-  // G gerúndio is none of the three classes and stays unlisted.
+  // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio;
+  // G gerúndio (the progressive/manner chains: `estava correndo`, `saiu correndo`).
   verbFeats: {
     finitePrefixes: ["P", "I", "J", "F", "Q", "C", "S", "T", "U", "Y"],
     infinitivePrefixes: ["W"],
     participlePrefixes: ["K"],
+    gerundPrefixes: ["G"],
+    // Presente, perfeito, futuro-do-presente and imperativo distinguish 1s/3s
+    // (falo/fala, falei/falou, falarei/falará); imperfeito (I), mais-que-
+    // perfeito (Q), condicional (C) and the subjuntivos (S/T/U) do NOT — and
+    // this DELAF often labels those shared forms `1s` only (`esperava,I1s`
+    // with no I3s line), so their person digit is noise.
+    personDistinctPrefixes: ["P", "J", "F", "Y"],
   },
 }

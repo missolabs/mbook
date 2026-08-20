@@ -259,7 +259,9 @@ describe("Murakami: the woman who called — relatives and the perfect", () => {
   it("nests an of-genitive under the preceding PP and locates a where-clause", () => {
     const garden = only("She waited in the garden of the temple.")
 
-    expect(relation(garden, "modifier-of", "garden", "waited")).toBeDefined()
+    // `wait` is prepositional-frame: its PP is a GOVERNED argument now, not a
+    // plain modifier.
+    expect(relation(garden, "oblique-of", "garden", "waited")).toBeDefined()
     expect(relation(garden, "modifier-of", "temple", "garden")).toBeDefined()
 
     const house = only("He returned to the house where a lamp burned.")
@@ -345,5 +347,68 @@ describe("dialogue attribution: said Kumiko", () => {
 
     expect(dependentsOf(sentence, "subject-of", "said")).toEqual(["Kumiko"])
     expect(relation(sentence, "object-of", "nothing", "said")).toBeDefined()
+  })
+})
+
+describe("argument structure: datives, particles, obliques", () => {
+  it("flips the double-object construction into recipient + object", () => {
+    const sentence = only("He gave Mary the book.")
+
+    expect(relation(sentence, "dative-of", "Mary", "gave")).toBeDefined()
+    expect(relation(sentence, "object-of", "book", "gave")).toBeDefined()
+  })
+
+  it("binds the to-marked recipient PP", () => {
+    const sentence = only("She gave the book to Mary.")
+
+    expect(relation(sentence, "object-of", "book", "gave")).toBeDefined()
+    expect(relation(sentence, "dative-of", "Mary", "gave")).toBeDefined()
+  })
+
+  it("reads the bare particle as part of the verb — and the preposition as not", () => {
+    const bare = only("He gave up.")
+
+    expect(relation(bare, "particle-of", "up", "gave")).toBeDefined()
+
+    const stairs = only("He went up the stairs.")
+
+    expect(stairs.relations.filter((r) => r.kind === "particle-of")).toEqual([])
+  })
+})
+
+describe("polarity, progressives, comparison, clauses", () => {
+  it("not flips the verb's relations", () => {
+    const sentence = only("He did not see the cat.")
+
+    expect(relation(sentence, "object-of", "cat", "see").polarity).toBe("negative")
+  })
+
+  it("chains the progressive participle onto its auxiliary", () => {
+    const sentence = only("She was running.")
+
+    expect(tagged(sentence, "running").pos).toBe("VERB")
+    expect(relation(sentence, "complement-of", "running", "was")).toBeDefined()
+  })
+
+  it("finds the comparative's standard through morphology alone", () => {
+    const sentence = only("The sea was darker than the sky.")
+
+    expect(relation(sentence, "predicate-of", "darker", "was")).toBeDefined()
+    expect(relation(sentence, "compared-to", "sky", "darker")).toBeDefined()
+  })
+
+  it("attaches the when-clause to the matrix verb", () => {
+    const sentence = only("She wept when the cat vanished.")
+
+    expect(relation(sentence, "adverbial-of", "when", "wept")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "vanished")).toEqual(["cat"])
+  })
+
+  it("whose hands the noun to its owner, and the matrix verb follows", () => {
+    const sentence = only("The man whose cat vanished wept.")
+
+    expect(relation(sentence, "modifier-of", "man", "cat")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "vanished")).toEqual(["cat"])
+    expect(dependentsOf(sentence, "subject-of", "wept")).toEqual(["man"])
   })
 })

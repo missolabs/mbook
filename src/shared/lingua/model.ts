@@ -76,14 +76,29 @@ export type ClosedClass = {
   abbreviations: string[]
 }
 
-// Which morphology-code prefixes mark a verb form finite, infinitive or past
-// participle, in the dictionary's own feat vocabulary. A language whose
-// infinitive is not morphologically distinct (English) declares no infinitive
-// prefixes, and the rules gated on them simply never fire there.
+// Which morphology-code prefixes mark a verb form finite, infinitive, past
+// participle or gerund, in the dictionary's own feat vocabulary. A language
+// whose infinitive is not morphologically distinct (English) declares no
+// infinitive prefixes, and the rules gated on them simply never fire there.
 export type VerbFeatMarks = {
   finitePrefixes: string[]
   infinitivePrefixes: string[]
   participlePrefixes: string[]
+  gerundPrefixes: string[]
+  // Tense prefixes where 1st and 3rd person singular are morphologically
+  // DISTINCT (pt falo/fala, falei/falou). Only a 1st/2nd-marked feat from one
+  // of these tenses is trustworthy person evidence — the shared-form tenses
+  // (imperfeito `falava`, condicional `falaria`) are person-ambiguous and the
+  // dictionary's 1s label there is an artifact, not a fact.
+  personDistinctPrefixes: string[]
+}
+
+// A third-person pronoun that refers back: its surface form and the agreement
+// feat ([mf][sp]) an antecedent must carry. An empty feat matches anything —
+// the honest declaration for a language whose nouns carry no gender.
+export type AnaphorHint = {
+  form: string
+  feat: string
 }
 
 export type SyntaxData = {
@@ -101,6 +116,45 @@ export type SyntaxData = {
   // Verb-of-saying lemmas: dialogue attribution inverts around these
   // (`disse Rei`, `said Holmes`), so a postverbal proper noun is their subject.
   dicendi: string[]
+  // Adpositions opening a recipient PP after a ditransitive (`deu o livro A
+  // MARIA`, `gave the book TO Mary`) — the dative-of relation's licence.
+  dativeMarkers: string[]
+  // Words that flip a clause's polarity when they ride its verb.
+  negators: string[]
+  // Third-person referring pronouns with the agreement their antecedent must
+  // show (ele->ms, she->fs); drives the dataflow anaphora pass.
+  anaphoricPronouns: AnaphorHint[]
+  // Possessives whose owner is discourse-given (`seu caderno` — whose?).
+  possessivePronouns: string[]
+  // Clitic pronoun classes: an accusative clitic riding a verb IS its object
+  // (`me encontrou`, `disse-me`), a dative clitic its recipient, and the
+  // reflexive marks the verb's argument as its own subject (`abraçaram-se`)
+  // or the se-passive/impersonal (`vendem-se casas`).
+  accusativeClitics: string[]
+  dativeClitics: string[]
+  reflexiveClitics: string[]
+  // Conjunctions opening an adverbial subordinate clause (`quando`, `while`):
+  // the clause's verb attaches to the matrix verb as adverbial-of.
+  subordinators: string[]
+  // The possessive relative (`cujo gato`, `whose cat`): the noun it precedes
+  // is possessed by the antecedent.
+  possessiveRelatives: string[]
+  // Article definiteness, read by the coreference pass: an indefinite NP
+  // introduces an entity, a later definite NP with the same head lemma
+  // resumes it (`um poço` ... `o poço`).
+  definiteArticles: string[]
+  indefiniteArticles: string[]
+  // Nouns that name time when they head an adjunct (`naquela noite`, `that
+  // morning`) — their attachment is temporal-of, not plain modification.
+  temporalNouns: string[]
+  // Verb particles forming a unit with the verb (`gave UP`, `looked BACK`);
+  // empty in Portuguese, which has no phrasal verbs.
+  particles: string[]
+  // The comparative scaffold: a degree adverb on the adjective (`mais alto`,
+  // `more beautiful`) and the standard marker introducing what it is compared
+  // to (`que`, `than`).
+  degreeAdverbs: string[]
+  thanMarkers: string[]
   verbFeats: VerbFeatMarks
 }
 

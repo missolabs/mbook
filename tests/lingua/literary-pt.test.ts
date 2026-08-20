@@ -486,12 +486,15 @@ describe("dialogue: the travessão attribution stays one sentence", () => {
     expect(analysis.sentences[0]!.attribution.kind).toBe("speech")
   })
 
-  it("keeps the question's own subject and object, and starves the attribution verb", () => {
+  it("keeps the question's own subject and object, and hands the attribution its pronoun sayer", () => {
     const sentence = analysis.sentences[0]!
 
     expect(relation(sentence, "subject-of", "Você", "viu")).toBeDefined()
     expect(relation(sentence, "object-of", "mar", "viu")).toBeDefined()
-    expect(dependentsOf(sentence, "subject-of", "perguntou")).toEqual([])
+
+    // The VP rule swallows `perguntou ela` into one chunk; the quotative
+    // inversion now reads the swallowed pronoun as the inverted sayer.
+    expect(dependentsOf(sentence, "subject-of", "perguntou")).toEqual(["ela"])
   })
 })
 
@@ -593,5 +596,191 @@ describe("the passive agent who is a bare name", () => {
     const sentence = only("Encontrei com Kirie no mercado.")
 
     expect(relation(sentence, "object-of", "Kirie", "Encontrei")).toBeDefined()
+  })
+})
+
+describe("argument structure: datives, obliques and clitics", () => {
+  it("binds the ditransitive's recipient — analytic and contracted", () => {
+    const gave = only("Deu a garrafa a Daniela.")
+
+    expect(relation(gave, "object-of", "garrafa", "Deu")).toBeDefined()
+    expect(relation(gave, "dative-of", "Daniela", "Deu")).toBeDefined()
+
+    const handed = only("Entregou o caderno ao sacerdote.")
+
+    expect(relation(handed, "object-of", "caderno", "Entregou")).toBeDefined()
+    expect(relation(handed, "dative-of", "sacerdote", "Entregou")).toBeDefined()
+  })
+
+  it("a prepositional-frame verb GOVERNS its argument, even a bare name", () => {
+    const sentence = only("Gostava da Daniela.")
+
+    expect(relation(sentence, "oblique-of", "Daniela", "Gostava")).toBeDefined()
+  })
+
+  it("an accusative clitic riding the verb is its object", () => {
+    const sentence = only("Ele me encontrou no mercado.")
+
+    expect(relation(sentence, "object-of", "me", "encontrou")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "encontrou")).toEqual(["Ele"])
+  })
+
+  it("a dative clitic on a ditransitive is its recipient", () => {
+    const sentence = only("Ele disse-me a verdade.")
+
+    expect(relation(sentence, "dative-of", "me", "disse")).toBeDefined()
+    expect(relation(sentence, "object-of", "verdade", "disse")).toBeDefined()
+  })
+
+  it("reaches the pied-piped relative's antecedent through the preposition", () => {
+    const sentence = only("A casa em que morei ficava longe.")
+
+    expect(relation(sentence, "oblique-of", "casa", "morei")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "ficava")).toEqual(["casa"])
+  })
+})
+
+describe("the three grammars of se", () => {
+  it("reads the se-passive's postverbal NP as its subject", () => {
+    const sentence = only("Vendem-se casas.")
+
+    expect(tagged(sentence, "casas").pos).toBe("NOUN")
+    expect(relation(sentence, "subject-of", "casas", "Vendem")).toBeDefined()
+    expect(relation(sentence, "reflexive-of", "se", "Vendem")).toBeDefined()
+  })
+
+  it("marks the reflexive and elides nothing", () => {
+    const analysis = analyze("Ela se abraçou.")
+    const sentence = analysis.sentences[0]!
+
+    expect(relation(sentence, "reflexive-of", "se", "abraçou")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "abraçou")).toEqual(["Ela"])
+    expect(analysis.discourse).toEqual([])
+  })
+
+  it("keeps the conditional se a subordinator, not a clitic", () => {
+    const sentence = only("Se a noite caísse, Rei sairia.")
+
+    expect(sentence.relations.filter((r) => r.kind === "reflexive-of")).toEqual([])
+    expect(relation(sentence, "adverbial-of", "Se", "sairia")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "sairia")).toEqual(["Rei"])
+  })
+})
+
+describe("predicates, chains and polarity", () => {
+  it("a copula's PP is its predicate, not a plain modifier", () => {
+    const sentence = only("Rei estava no bar.")
+
+    expect(relation(sentence, "predicate-of", "bar", "estava")).toBeDefined()
+  })
+
+  it("chains the gerund onto the progressive auxiliary", () => {
+    const sentence = only("Estava correndo pela rua.")
+
+    expect(relation(sentence, "complement-of", "correndo", "Estava")).toBeDefined()
+  })
+
+  it("a negator riding the verb flips its relations' polarity", () => {
+    const sentence = only("Rei não abriu a porta.")
+
+    expect(relation(sentence, "object-of", "porta", "abriu").polarity).toBe("negative")
+    expect(relation(sentence, "subject-of", "Rei", "abriu").polarity).toBe("negative")
+  })
+
+  it("the flip follows the passive chain onto the participle", () => {
+    const sentence = only("A estima não era compartilhada por Kirie.")
+
+    expect(relation(sentence, "agent-of", "Kirie", "compartilhada").polarity).toBe("negative")
+  })
+
+  it("an affirmative clause stays affirmative", () => {
+    const sentence = only("Rei abriu a porta.")
+
+    expect(relation(sentence, "object-of", "porta", "abriu").polarity).toBe("affirmative")
+  })
+})
+
+describe("comparatives, time and subordinate clauses", () => {
+  it("finds the comparative's standard past the than-marker", () => {
+    const sentence = only("Kumiko era mais alta que Kirie.")
+
+    expect(tagged(sentence, "alta").pos).toBe("ADJ")
+    expect(relation(sentence, "predicate-of", "alta", "era")).toBeDefined()
+    expect(relation(sentence, "compared-to", "Kirie", "alta")).toBeDefined()
+  })
+
+  it("a time-naming adjunct frames the event, past a nearer nominal", () => {
+    const sentence = only("Li o caderno naquela noite.")
+
+    expect(relation(sentence, "temporal-of", "noite", "Li")).toBeDefined()
+  })
+
+  it("a sentence-opening time NP frames the clause ahead", () => {
+    const sentence = only("Uma vez, encontrei Daniela no mercado.")
+
+    expect(relation(sentence, "temporal-of", "vez", "encontrei")).toBeDefined()
+  })
+
+  it("attaches an adverbial clause to its matrix verb, both orders", () => {
+    const trailing = only("Chorou quando o gato sumiu.")
+
+    expect(relation(trailing, "adverbial-of", "quando", "Chorou")).toBeDefined()
+    expect(dependentsOf(trailing, "subject-of", "sumiu")).toEqual(["gato"])
+
+    const leading = only("Quando a noite caiu, Rei saiu.")
+
+    expect(relation(leading, "adverbial-of", "Quando", "saiu")).toBeDefined()
+    expect(dependentsOf(leading, "subject-of", "caiu")).toEqual(["noite"])
+  })
+})
+
+describe("relatives, questions and address", () => {
+  it("the possessive relative hands the noun to its owner — and the matrix verb too", () => {
+    const sentence = only("O homem cujo gato sumiu chorava.")
+
+    expect(relation(sentence, "modifier-of", "homem", "gato")).toBeDefined()
+    expect(dependentsOf(sentence, "subject-of", "sumiu")).toEqual(["gato"])
+    expect(dependentsOf(sentence, "subject-of", "chorava")).toEqual(["homem"])
+  })
+
+  it("recovers the fronted interrogative object", () => {
+    const what = only("O que ele viu?")
+
+    expect(relation(what, "object-of", "que", "viu")).toBeDefined()
+
+    const who = only("Quem ele viu?")
+
+    expect(relation(who, "object-of", "Quem", "viu")).toBeDefined()
+  })
+
+  it("reads the addressed name as vocative, never as a first-person verb's subject", () => {
+    const leading = only("Daniela, acho que você exagera.")
+
+    expect(relation(leading, "vocative-of", "Daniela", "acho")).toBeDefined()
+    expect(dependentsOf(leading, "subject-of", "acho")).toEqual([])
+
+    const trailing = only("Não chore, Daniela.")
+
+    expect(relation(trailing, "vocative-of", "Daniela", "chore")).toBeDefined()
+  })
+
+  it("shares a right-node-raised object back across the conjunction", () => {
+    const sentence = only("Comprou e leu o caderno.")
+
+    expect(relation(sentence, "object-of", "caderno", "leu")).toBeDefined()
+    expect(relation(sentence, "object-of", "caderno", "Comprou")).toBeDefined()
+  })
+
+  it("an indefinite comma-NP renames the name before it", () => {
+    const sentence = only("Encontrei Daniela, uma mulher de poucas palavras.")
+
+    expect(relation(sentence, "appositive-of", "mulher", "Daniela")).toBeDefined()
+  })
+
+  it("hands the inverted attribution its quote as complement", () => {
+    const sentence = only("Um dos meus maiores defeitos era ligar demais, dizia Rei.")
+
+    expect(dependentsOf(sentence, "subject-of", "dizia")).toEqual(["Rei"])
+    expect(relation(sentence, "complement-of", "Um", "dizia")).toBeDefined()
   })
 })

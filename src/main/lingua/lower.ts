@@ -38,6 +38,7 @@ export type RelationRow = {
   depTokenIdx: number
   relation: string
   provenance: string
+  polarity: string
 }
 
 export type SentenceRow = {
@@ -141,6 +142,7 @@ function sentenceRow(sentence: Sentence, location: SentenceLocation, paragraphId
       depTokenIdx: relation.dependent,
       relation: relation.kind,
       provenance: relation.provenance,
+      polarity: relation.polarity,
     })),
   }
 }

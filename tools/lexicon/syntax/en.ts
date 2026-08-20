@@ -210,6 +210,38 @@ export const EN_SYNTAX: SyntaxData = {
     "cry", "exclaim", "insist", "repeat", "argue", "add", "continue",
     "conclude", "remark", "sigh", "groan", "wonder", "think",
   ],
+  dativeMarkers: ["to", "for"],
+  negators: ["not", "never"],
+  // English nouns carry no gender feat, so agreement can only come from the
+  // pronoun side; an antecedent search falls back to nearest-nominal when the
+  // candidate carries no feat to check.
+  anaphoricPronouns: [
+    { form: "he", feat: "ms" },
+    { form: "she", feat: "fs" },
+    { form: "they", feat: "" },
+  ],
+  possessivePronouns: ["his", "her", "their"],
+  // English object pronouns are free forms the normal NP/object machinery
+  // already binds ("saw him"); no clitic classes exist.
+  accusativeClitics: [],
+  dativeClitics: [],
+  reflexiveClitics: [],
+  // All in the closed conjunction list; these open adverbial clauses.
+  subordinators: ["when", "while", "because", "although", "though", "if", "unless", "until", "once"],
+  possessiveRelatives: ["whose"],
+  definiteArticles: ["the"],
+  indefiniteArticles: ["a", "an"],
+  temporalNouns: [
+    "night", "day", "morning", "evening", "afternoon", "moment", "instant",
+    "hour", "time", "year", "month", "week", "summer", "winter", "spring",
+    "autumn", "childhood", "eve", "sunday", "saturday",
+  ],
+  // The verb-particle construction ("gave up", "looked back"). `on`/`in` are
+  // deliberately absent — as particles they are rarer than their plain
+  // prepositional readings and would steal PP openers.
+  particles: ["up", "down", "out", "off", "away", "back"],
+  degreeAdverbs: ["more", "less", "as"],
+  thanMarkers: ["than", "as"],
   // AGID/Moby codes: PAST, 3SG and FIN are finite ("PAST" also prefixes
   // PASTPART — an accepted over-match, since a participle-only homograph with a
   // noun reading is vanishingly rare). The English infinitive is the bare base
@@ -219,5 +251,9 @@ export const EN_SYNTAX: SyntaxData = {
     finitePrefixes: ["PAST", "3SG", "FIN"],
     infinitivePrefixes: [],
     participlePrefixes: ["PASTPART"],
+    gerundPrefixes: ["PROG"],
+    // English feats never carry 1st/2nd person digits, so no tense needs
+    // declaring; the person gates simply never fire here.
+    personDistinctPrefixes: [],
   },
 }

@@ -95,7 +95,8 @@ CREATE TABLE relations (
   head_token_idx INTEGER NOT NULL,
   dep_token_idx INTEGER NOT NULL,
   relation TEXT NOT NULL,
-  provenance TEXT NOT NULL
+  provenance TEXT NOT NULL,
+  polarity TEXT NOT NULL DEFAULT 'affirmative'
 );
 CREATE TABLE spans (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -133,7 +134,7 @@ export function openLinguaStore(path: string): Result<LinguaStore, StoreError> {
   }
 }
 
-const VERSION = 3
+const VERSION = 4
 
 function migrate(db: Db): void {
   const version = currentVersion(db)
@@ -185,7 +186,7 @@ function store(db: Db): LinguaStore {
     "INSERT INTO chunks (sentence_id, idx, kind, head_idx, token_start, token_end) VALUES (?, ?, ?, ?, ?, ?)",
   )
   const insertRelation = db.prepare(
-    "INSERT INTO relations (sentence_id, head_token_idx, dep_token_idx, relation, provenance) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO relations (sentence_id, head_token_idx, dep_token_idx, relation, provenance, polarity) VALUES (?, ?, ?, ?, ?, ?)",
   )
   const insertSpan = db.prepare(
     "INSERT INTO spans (book_id, kind, char_start, char_end, slug, unresolved_name) VALUES (?, ?, ?, ?, ?, ?)",
@@ -289,6 +290,7 @@ function store(db: Db): LinguaStore {
       relation.depTokenIdx,
       relation.relation,
       relation.provenance,
+      relation.polarity,
     )
   }
 

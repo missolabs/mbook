@@ -45,14 +45,30 @@ export type RelationKind =
   | "predicate-of"
   | "agent-of"
   | "located-in"
+  | "oblique-of" // a prepositional-frame verb's governed PP argument (gostar DE, think OF)
+  | "dative-of" // a ditransitive's recipient (deu o livro A MARIA, gave the book TO MARY)
+  | "particle-of" // a verb-particle unit's particle (gave UP)
+  | "vocative-of" // an addressed name, outside the clause's argument structure (Daniela, acho...)
+  | "appositive-of" // a comma-bound renaming NP (Daniela, UMA MULHER que conheci)
+  | "compared-to" // the standard of a comparative (mais alto QUE DANIELA)
+  | "temporal-of" // a time-naming adjunct (NAQUELA NOITE, li)
+  | "reflexive-of" // the reflexive/reciprocal/impersonal clitic riding its verb (abraçaram-SE)
+  | "adverbial-of" // an adverbial subordinate clause's subordinator, bound to the matrix verb
 
 export type RelationProvenance = "heuristic" | "pinned"
+
+// Whether the clause the relation lives in is asserted or denied: a declared
+// negator riding the verb (`não era`, `did not see`, `nunca mais voltou`)
+// flips every relation headed by that verb — and, through complement chains,
+// by its chained participle/infinitive.
+export type Polarity = "affirmative" | "negative"
 
 export type Relation = {
   kind: RelationKind
   dependent: number
   head: number
   provenance: RelationProvenance
+  polarity: Polarity
 }
 
 // A resolved subject-mention's covered token indices in this sentence.
@@ -75,16 +91,24 @@ export function bind(input: RelationInput): readonly Relation[] {
       case "VP":
         addSubject(relations, input, ci, pinnedSubjects)
         addQuotativeInversion(relations, input, ci, pinnedSubjects)
+        addSePassive(relations, input, ci, pinnedSubjects)
+        addCliticArguments(relations, input, ci)
         addComplementOrObject(relations, input, ci, pinnedSubjects)
         addRelativeObject(relations, input, ci)
+        addPiedPipedRelative(relations, input, ci)
         addPredicate(relations, input, ci, pinnedSubjects)
         addPresentationalSubject(relations, input, ci, pinnedSubjects)
         addInfinitiveChain(relations, input, ci)
         addParticipleChain(relations, input, ci)
+        addGerundChain(relations, input, ci)
+        addParticle(relations, input, ci)
+        addOblique(relations, input, ci)
+        addDative(relations, input, ci)
         return
       case "NP":
         addModifiers(relations, input.tokens, chunk)
         addPossessive(relations, input, ci)
+        addAppositive(relations, input, ci)
         return
       case "PP":
         addAttachment(relations, input, ci)
@@ -93,9 +117,16 @@ export function bind(input: RelationInput): readonly Relation[] {
   })
 
   addLocations(relations, input)
+  addVocatives(relations, input)
+  addPossessiveRelatives(relations, input)
+  addComparatives(relations, input)
+  addSubordinateClauses(relations, input)
+  addSharedObjects(relations, input)
+  addQuoteContent(relations, input)
+  addTemporalOpeners(relations, input)
   expandCoordination(relations, input)
 
-  return relations
+  return applyPolarity(relations, input)
 }
 
 type Pins = ReadonlyMap<number, number>
@@ -162,7 +193,7 @@ function addSubject(relations: Relation[], input: RelationInput, ci: number, pin
       break
   }
 
-  const np = nearestNpBefore(chunks, ci)
+  const np = nearestSubjectCandidateBefore(input, ci)
 
   switch (np.kind) {
     case "none":
@@ -182,9 +213,102 @@ function addSubject(relations: Relation[], input: RelationInput, ci: number, pin
       break
   }
 
-  const dependent = resolveRelative(input, np.value)
+  const dependent = resolveRelative(input, np.value, ci)
+
+  // A NOMINAL cannot govern a verb marked exclusively 1st/2nd person:
+  // `Daniela, acho que...` addresses Daniela, it does not make her think in
+  // the first person. Personal pronouns pass — they carry the person.
+  switch (nominalBlocksPerson(input, dependent, chunks[ci]!.head)) {
+    case true:
+      return
+    case false:
+      break
+  }
 
   relations.push(relation("subject-of", dependent, chunks[ci]!.head, "heuristic"))
+}
+
+// The nearest preceding NP that can honestly BE a subject: a bare clitic
+// pronoun NP (`Eu ME lembro` — the `me` chunk) is a verb argument, never the
+// clause's subject, so the scan steps past it.
+function nearestSubjectCandidateBefore(input: RelationInput, ci: number): Optional<number> {
+  let best: Optional<number> = { kind: "none" }
+
+  for (let k = 0; k < ci; k++) {
+    const chunk = input.chunks[k]!
+
+    switch (chunk.kind === "NP" && isCliticNp(input, k) === false) {
+      case true:
+        best = { kind: "some", value: k }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
+}
+
+function isCliticNp(input: RelationInput, ci: number): boolean {
+  const np = input.chunks[ci]!
+
+  switch (np.to - np.from === 1) {
+    case false:
+      return false
+    case true:
+      break
+  }
+
+  const token = input.tokens[np.head]!
+
+  switch (token.role) {
+    case "punctuation":
+      return false
+    case "content":
+      break
+  }
+
+  const lower = token.tagged.token.text.toLowerCase()
+
+  return (
+    input.syntax.accusativeClitics.includes(lower) ||
+    input.syntax.dativeClitics.includes(lower) ||
+    input.syntax.reflexiveClitics.includes(lower)
+  )
+}
+
+// True when the verb's morphology names ONLY 1st/2nd person while the
+// candidate subject is a plain nominal (NOUN/PROPN head).
+function nominalBlocksPerson(input: RelationInput, dependent: number, verbHead: number): boolean {
+  switch (unambiguousFirstSecond(contentFeat(input.tokens[verbHead]!), input.syntax.verbFeats)) {
+    case false:
+      return false
+    case true:
+      break
+  }
+
+  const subject = input.tokens[dependent]!
+
+  switch (subject.role) {
+    case "punctuation":
+      return false
+    case "content":
+      return subject.tagged.pos === "NOUN" || subject.tagged.pos === "PROPN"
+  }
+}
+
+// A 1st/2nd-only person digit is EVIDENCE only in tenses that actually
+// distinguish 1s from 3s (`acho` P1s, `cheguei` J1s); the shared-form tenses
+// (`esperava` I1s in this DELAF) carry a person label that is an artifact.
+function unambiguousFirstSecond(feat: string, marks: VerbFeatMarks): boolean {
+  const firstSecondOnly = /[12]/.test(feat) && feat.includes("3") === false
+
+  switch (firstSecondOnly) {
+    case false:
+      return false
+    case true:
+      return marks.personDistinctPrefixes.some((prefix) => feat.startsWith(prefix))
+  }
 }
 
 function terminalBetween(tokens: readonly AnalyzedToken[], from: number, to: number): boolean {
@@ -296,8 +420,36 @@ function inheritedSubject(
 // not `que`. The pronoun defers to the nearest NP before it; with no
 // antecedent (`Quem chegou?`) it keeps the slot — an interrogative subject is
 // honest as-is.
-function resolveRelative(input: RelationInput, npIndex: number): number {
+function resolveRelative(input: RelationInput, npIndex: number, vpIndex: number): number {
   const np = input.chunks[npIndex]!
+
+  // An NP behind a possessive relative belongs to the RELATIVE CLAUSE — once
+  // its own verb is spoken for (a VP stands between them), the MATRIX verb's
+  // subject is the possessor: `o homem cujo gato sumiu CHORAVA` weeps the
+  // man, not the cat; `sumiu` itself keeps the cat. The relative sits before
+  // the chunk in Portuguese (`cujo` chunks alone) and inside it in English
+  // (`whose cat` chunks together).
+  const opener =
+    isPossessiveRelative(input, np.from) ? np.from : np.from - 1
+  const clauseVerbBetween = input.chunks.some(
+    (c, k) => c.kind === "VP" && k !== vpIndex && c.from >= np.to && c.to <= input.chunks[vpIndex]!.from,
+  )
+
+  switch (opener >= 0 && isPossessiveRelative(input, opener) && clauseVerbBetween) {
+    case true: {
+      const owner = antecedentBefore(input, opener)
+
+      switch (owner.kind) {
+        case "some":
+          return owner.value
+        case "none":
+          break
+      }
+      break
+    }
+    case false:
+      break
+  }
 
   switch (np.to - np.from === 1 && isRelativePronoun(input.tokens[np.head]!, input.syntax.relativePronouns)) {
     case false:
@@ -314,6 +466,12 @@ function resolveRelative(input: RelationInput, npIndex: number): number {
     case "some":
       return input.chunks[antecedent.value]!.head
   }
+}
+
+function isPossessiveRelative(input: RelationInput, at: number): boolean {
+  const lower = tokenLower(input.tokens[at]!)
+
+  return lower !== null && input.syntax.possessiveRelatives.includes(lower)
 }
 
 function isRelativePronoun(token: AnalyzedToken, relativePronouns: readonly string[]): boolean {
@@ -365,6 +523,20 @@ function addQuotativeInversion(relations: Relation[], input: RelationInput, ci: 
       break
   }
 
+  // The pronoun sayer the pt VP rule swallowed: `perguntou ela` chunks as one
+  // VP, so the tail pronoun sits INSIDE it, after the head.
+  for (let at = vp.head + 1; at < vp.to; at++) {
+    const lower = tokenLower(input.tokens[at]!)
+
+    switch (lower !== null && input.syntax.anaphoricPronouns.some((a) => a.form === lower)) {
+      case true:
+        claimInvertedSubject(relations, at, vp.head)
+        return
+      case false:
+        continue
+    }
+  }
+
   const start = afterParentheticals(input.tokens, vp.to)
   const candidate = firstChunkFrom(input.chunks, start)
 
@@ -386,17 +558,35 @@ function addQuotativeInversion(relations: Relation[], input: RelationInput, ci: 
 
   const head = input.tokens[chunk.head]!
 
-  switch (head.role === "content" && head.tagged.pos === "PROPN") {
+  switch (head.role) {
+    case "punctuation":
+      return
+    case "content":
+      break
+  }
+
+  // The sayer is a proper noun (`disse Rei`) or a 3rd-person personal
+  // pronoun (`perguntou ela`) — the anaphoric-pronoun list doubles as the
+  // roster of pronouns that can stand in an attribution tail.
+  const sayer =
+    head.tagged.pos === "PROPN" ||
+    input.syntax.anaphoricPronouns.some((a) => a.form === head.tagged.token.text.toLowerCase())
+
+  switch (sayer) {
     case false:
       return
     case true:
       break
   }
 
+  claimInvertedSubject(relations, chunk.head, vp.head)
+}
+
+function claimInvertedSubject(relations: Relation[], dependent: number, head: number): void {
   for (let at = relations.length - 1; at >= 0; at--) {
     const existing = relations[at]!
 
-    switch (existing.kind === "subject-of" && existing.head === vp.head) {
+    switch (existing.kind === "subject-of" && existing.head === head) {
       case true:
         relations.splice(at, 1)
         continue
@@ -405,7 +595,7 @@ function addQuotativeInversion(relations: Relation[], input: RelationInput, ci: 
     }
   }
 
-  relations.push(relation("subject-of", chunk.head, vp.head, "heuristic"))
+  relations.push(relation("subject-of", dependent, head, "heuristic"))
 }
 
 // An NP ending exactly where this VP starts — the preverbal subject of a
@@ -567,6 +757,23 @@ function addPredicate(relations: Relation[], input: RelationInput, ci: number, p
 
   const candidate = firstChunkFrom(input.chunks, start)
 
+  // An adjective standing BEFORE the first chunk wins the predicate slot:
+  // `era mais alta que Kirie` predicates the height, and the NP after the
+  // than-marker is the comparison's standard, not what Kumiko is.
+  const early = adjectiveAfter(input.tokens, start)
+
+  const adjectiveFirst =
+    early.kind === "some" &&
+    (candidate.kind === "none" || early.value < input.chunks[(candidate as { value: number }).value]!.from)
+
+  switch (adjectiveFirst) {
+    case true:
+      relations.push(relation("predicate-of", (early as { value: number }).value, input.chunks[ci]!.head, "heuristic"))
+      return
+    case false:
+      break
+  }
+
   switch (candidate.kind) {
     case "some": {
       const chunk = input.chunks[candidate.value]!
@@ -593,6 +800,26 @@ function addPredicate(relations: Relation[], input: RelationInput, ci: number, p
       relations.push(relation("predicate-of", adjective.value, input.chunks[ci]!.head, "heuristic"))
       return
     case "none":
+      break
+  }
+
+  // The locative/prepositional predicate: `Rei estava no bar` predicates
+  // where Rei was — the copula's directly-following PP is its predicate, not
+  // a plain modifier.
+  switch (candidate.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const pp = input.chunks[candidate.value]!
+
+  switch (pp.kind === "PP" && pp.from === start) {
+    case true:
+      relations.push(relation("predicate-of", pp.head, input.chunks[ci]!.head, "heuristic"))
+      return
+    case false:
       return
   }
 }
@@ -765,6 +992,98 @@ function addRelativeObject(relations: Relation[], input: RelationInput, ci: numb
       relations.push(relation("object-of", rel.value, vp.head, "heuristic"))
       return
     case false:
+      break
+  }
+
+  // The fronted interrogative: `Quem ele viu?` moves the verb's object to the
+  // sentence front. A bare relative pronoun opening an interrogative sentence,
+  // with the clause's own subject between it and the verb, is that object.
+  const fronted = rel.value === firstContentIndex(input.tokens) && isInterrogative(input.tokens)
+
+  switch (fronted) {
+    case true:
+      relations.push(relation("object-of", rel.value, vp.head, "heuristic"))
+      return
+    case false:
+      return
+  }
+}
+
+function isInterrogative(tokens: readonly AnalyzedToken[]): boolean {
+  for (const token of tokens) {
+    switch (token.role) {
+      case "content":
+        continue
+      case "punctuation":
+        break
+    }
+
+    switch (token.token.text === "?") {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  return false
+}
+
+// The pied-piped relative: `a casa EM QUE morei` reaches its antecedent
+// through the preposition — the antecedent is the verb's OBLIQUE argument,
+// whatever the verb's frame (a prepositional verb is exactly what pied-pipes
+// most). Fires on ADP + relative pronoun directly before the clause's verb.
+function addPiedPipedRelative(relations: Relation[], input: RelationInput, ci: number): void {
+  const vp = input.chunks[ci]!
+
+  const rel = relativeOpenerBefore(input, vp.from)
+
+  switch (rel.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  // The pronoun binds the FIRST verb of its clause: another verb between
+  // pronoun and this VP means this VP is the matrix (`a casa em que morei
+  // FICAVA longe` — ficava is not the pied-piped clause's verb).
+  for (let at = rel.value + 1; at < vp.from; at++) {
+    switch (isVerbToken(input.tokens[at]!)) {
+      case true:
+        return
+      case false:
+        continue
+    }
+  }
+
+  const before = rel.value - 1
+
+  switch (before >= 0 && contentPos(input.tokens[before]!) === "ADP") {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const antecedent = antecedentBefore(input, before)
+
+  switch (antecedent.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const already = relations.some(
+    (r) => (r.kind === "oblique-of" || r.kind === "object-of") && r.head === vp.head,
+  )
+
+  switch (already) {
+    case true:
+      return
+    case false:
+      relations.push(relation("oblique-of", antecedent.value, vp.head, "heuristic"))
       return
   }
 }
@@ -1210,6 +1529,21 @@ function addModifiers(relations: Relation[], tokens: readonly AnalyzedToken[], n
 // passive participle, so the edge is `agent-of`, the relation the "who did
 // it" graph question reads.
 function addAttachment(relations: Relation[], input: RelationInput, ci: number): void {
+  // A PP some verb already GOVERNS (oblique-of, dative-of, predicate-of) is
+  // an argument, not an adjunct — no second, weaker edge.
+  const claimed = relations.some(
+    (r) =>
+      (r.kind === "oblique-of" || r.kind === "dative-of" || r.kind === "predicate-of") &&
+      r.dependent === input.chunks[ci]!.head,
+  )
+
+  switch (claimed) {
+    case true:
+      return
+    case false:
+      break
+  }
+
   const genitiveHost = nestedGenitiveHost(input, ci)
 
   switch (genitiveHost.kind) {
@@ -1224,6 +1558,10 @@ function addAttachment(relations: Relation[], input: RelationInput, ci: number):
 
   switch (anchor.kind) {
     case "none":
+      // A sentence-opening TIME PP frames the clause ahead of it: `Naquela
+      // noite, li o caderno` — temporal-of onto the first verb. Non-temporal
+      // openers keep the honest silence.
+      addForwardTemporal(relations, input, ci)
       return
     case "some":
       break
@@ -1236,7 +1574,58 @@ function addAttachment(relations: Relation[], input: RelationInput, ci: number):
       relations.push(relation("agent-of", input.chunks[ci]!.head, input.chunks[anchor.value]!.head, "heuristic"))
       return
     case false:
-      relations.push(relation("modifier-of", input.chunks[ci]!.head, input.chunks[anchor.value]!.head, "heuristic"))
+      break
+  }
+
+  // A time-naming PP frames the EVENT, not the nearest nominal: `li o caderno
+  // naquela noite` — the night belongs to the reading, so a temporal head
+  // reaches past a nearer NP to the last verb.
+  switch (isTemporalHead(input, ci)) {
+    case false:
+      break
+    case true: {
+      const vp = lastVpBefore(input.chunks, ci)
+
+      switch (vp.kind) {
+        case "some":
+          relations.push(relation("temporal-of", input.chunks[ci]!.head, input.chunks[vp.value]!.head, "heuristic"))
+          return
+        case "none":
+          break
+      }
+      break
+    }
+  }
+
+  relations.push(relation("modifier-of", input.chunks[ci]!.head, input.chunks[anchor.value]!.head, "heuristic"))
+}
+
+function isTemporalHead(input: RelationInput, ci: number): boolean {
+  const head = input.tokens[input.chunks[ci]!.head]!
+
+  switch (head.role) {
+    case "punctuation":
+      return false
+    case "content":
+      return input.syntax.temporalNouns.includes(head.tagged.lemma.toLowerCase())
+  }
+}
+
+function addForwardTemporal(relations: Relation[], input: RelationInput, ci: number): void {
+  switch (isTemporalHead(input, ci)) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const vp = input.chunks.find((c) => c.kind === "VP" && c.from >= input.chunks[ci]!.to)
+
+  switch (vp === undefined) {
+    case true:
+      return
+    case false:
+      relations.push(relation("temporal-of", input.chunks[ci]!.head, vp!.head, "heuristic"))
       return
   }
 }
@@ -1445,6 +1834,497 @@ function isPossessiveMarker(token: AnalyzedToken | undefined): boolean {
   }
 }
 
+// ─── se-constructions ────────────────────────────────────────────────────────
+// The reflexive clitic riding a verb is three grammars in one surface:
+//   * the SE-PASSIVE — `Vendem-se casas`: no preverbal subject candidate and a
+//     postverbal NP; that NP is the grammatical subject (the patient), exactly
+//     the presentational inversion shape;
+//   * the reflexive/reciprocal — `Ela se abraçou`, `abraçaram-se`: the verb's
+//     argument is its own subject; the clitic itself carries the relation;
+//   * the impersonal — `vivia-se bem`: no NP at all; the clitic still claims
+//     the verb so the elision pass knows nothing was dropped.
+// The conditional homograph (`Se chovesse...`) never reaches here: a proclitic
+// `se` must ride directly against its verb AFTER other clause material — a
+// sentence-initial or post-punctuation `se` is the subordinator's.
+function addSePassive(relations: Relation[], input: RelationInput, ci: number, pins: Pins): void {
+  const vp = input.chunks[ci]!
+  const se = reflexiveCliticOf(input, ci)
+
+  switch (se.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  relations.push(relation("reflexive-of", se.value, vp.head, "heuristic"))
+
+  const preverbal = nearestSubjectCandidateBefore(input, ci)
+  const start = afterParentheticals(input.tokens, vp.to)
+  const candidate = firstChunkFrom(input.chunks, start)
+
+  const inverts =
+    pins.get(ci) === undefined && preverbal.kind === "none" && candidate.kind === "some"
+
+  switch (inverts) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const chunk = input.chunks[(candidate as { value: number }).value]!
+
+  switch (chunk.kind === "NP" && punctuationBetween(input.tokens, start, chunk.from) === false) {
+    case true:
+      relations.push(relation("subject-of", chunk.head, vp.head, "heuristic"))
+      return
+    case false:
+      return
+  }
+}
+
+// The verb-adjacent reflexive clitic: enclitic inside the VP chunk (the
+// hyphen split of `abraçaram-se`), or a bare proclitic NP directly abutting
+// it that FOLLOWS other clause content.
+function reflexiveCliticOf(input: RelationInput, ci: number): Optional<number> {
+  const vp = input.chunks[ci]!
+
+  for (let at = vp.head + 1; at < vp.to; at++) {
+    switch (tokenLower(input.tokens[at]!) !== null && input.syntax.reflexiveClitics.includes(tokenLower(input.tokens[at]!)!)) {
+      case true:
+        return { kind: "some", value: at }
+      case false:
+        continue
+    }
+  }
+
+  return procliticOf(input, ci, input.syntax.reflexiveClitics)
+}
+
+function procliticOf(input: RelationInput, ci: number, clitics: readonly string[]): Optional<number> {
+  const vp = input.chunks[ci]!
+  const np = input.chunks.find((c) => c.kind === "NP" && c.to === vp.from && c.to - c.from === 1)
+
+  switch (np === undefined) {
+    case true:
+      return { kind: "none" }
+    case false:
+      break
+  }
+
+  const lower = tokenLower(input.tokens[np!.head]!)
+
+  switch (lower !== null && clitics.includes(lower!)) {
+    case false:
+      return { kind: "none" }
+    case true:
+      break
+  }
+
+  // Sentence-initial or post-punctuation position belongs to the homographs
+  // (conditional `Se...`); a true proclitic follows clause material.
+  const before = np!.from - 1
+
+  switch (before >= 0 && input.tokens[before]!.role === "content") {
+    case true:
+      return { kind: "some", value: np!.head }
+    case false:
+      return { kind: "none" }
+  }
+}
+
+function tokenLower(token: AnalyzedToken): string | null {
+  switch (token.role) {
+    case "punctuation":
+      return null
+    case "content":
+      return token.tagged.token.text.toLowerCase()
+  }
+}
+
+// ─── clitic arguments ────────────────────────────────────────────────────────
+// An object pronoun riding the verb IS the verb's argument: `disse-me` hands
+// the recipient, `me encontrou` the patient. The valency frame arbitrates the
+// case of the ambiguous clitics (me/te/nos): a ditransitive or copular reads
+// them dative, an object-taking verb accusative, and a verb that takes
+// neither leaves them honestly unbound (`me lembro` — the pronominal-verb
+// construction this engine does not yet model).
+function addCliticArguments(relations: Relation[], input: RelationInput, ci: number): void {
+  const vp = input.chunks[ci]!
+  const lemma = verbLemma(input.tokens, vp)
+  const frame = frameOf(lemma, input.syntax.valency)
+
+  for (const at of cliticTokensOf(input, ci)) {
+    const lower = tokenLower(input.tokens[at]!)!
+
+    switch (input.syntax.reflexiveClitics.includes(lower)) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    const dativeFirst =
+      frame.kind === "some" && (frame.value === "ditransitive" || frame.value === "copular")
+
+    switch (dativeFirst && input.syntax.dativeClitics.includes(lower)) {
+      case true:
+        relations.push(relation("dative-of", at, vp.head, "heuristic"))
+        continue
+      case false:
+        break
+    }
+
+    switch (takesObject(lemma, input.syntax.valency) && input.syntax.accusativeClitics.includes(lower)) {
+      case true:
+        relations.push(relation("object-of", at, vp.head, "heuristic"))
+        continue
+      case false:
+        break
+    }
+
+    const dativeOnly =
+      input.syntax.dativeClitics.includes(lower) && input.syntax.accusativeClitics.includes(lower) === false
+
+    switch (dativeOnly) {
+      case true:
+        relations.push(relation("dative-of", at, vp.head, "heuristic"))
+        continue
+      case false:
+        continue
+    }
+  }
+}
+
+function cliticTokensOf(input: RelationInput, ci: number): readonly number[] {
+  const vp = input.chunks[ci]!
+  const all = [
+    ...input.syntax.accusativeClitics,
+    ...input.syntax.dativeClitics,
+    ...input.syntax.reflexiveClitics,
+  ]
+
+  const out: number[] = []
+
+  for (let at = vp.head + 1; at < vp.to; at++) {
+    const lower = tokenLower(input.tokens[at]!)
+
+    switch (lower !== null && all.includes(lower!)) {
+      case true:
+        out.push(at)
+        continue
+      case false:
+        continue
+    }
+  }
+
+  const proclitic = procliticOf(input, ci, all)
+
+  switch (proclitic.kind) {
+    case "some":
+      out.push(proclitic.value)
+      break
+    case "none":
+      break
+  }
+
+  return out
+}
+
+// ─── verb chains and particles ───────────────────────────────────────────────
+// The gerund mirror of the participle chain: the progressive periphrasis
+// (`estava correndo`, `was running`) and the manner chain (`saiu correndo`)
+// both continue the nearest preceding VP.
+function addGerundChain(relations: Relation[], input: RelationInput, ci: number): void {
+  const chunk = input.chunks[ci]!
+
+  switch (isGerund(input.tokens[chunk.head]!, input.syntax.verbFeats)) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const previous = previousVp(input.chunks, ci)
+
+  switch (previous.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const matrix = input.chunks[previous.value]!
+
+  switch (punctuationBetween(input.tokens, matrix.to, chunk.from)) {
+    case true:
+      return
+    case false:
+      relations.push(relation("complement-of", chunk.head, matrix.head, "heuristic"))
+      return
+  }
+}
+
+function isGerund(token: AnalyzedToken, marks: VerbFeatMarks): boolean {
+  switch (token.role) {
+    case "punctuation":
+      return false
+    case "content":
+      return (
+        token.tagged.pos === "VERB" &&
+        marks.gerundPrefixes.some((prefix) => token.tagged.feat.startsWith(prefix))
+      )
+  }
+}
+
+// A declared particle directly at the verb's right edge forms a unit with it
+// (`gave up`, `looked back`) — unless it opens a PP chunk there, in which
+// case it is a plain preposition (`went up the stairs`).
+function addParticle(relations: Relation[], input: RelationInput, ci: number): void {
+  const vp = input.chunks[ci]!
+  const at = vp.to
+  const token = input.tokens[at]
+
+  switch (token === undefined) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const lower = tokenLower(token!)
+
+  switch (lower !== null && input.syntax.particles.includes(lower!)) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const opensPp = input.chunks.some((c) => c.kind === "PP" && c.from === at)
+
+  switch (opensPp) {
+    case true:
+      return
+    case false:
+      relations.push(relation("particle-of", at, vp.head, "heuristic"))
+      return
+  }
+}
+
+// ─── oblique and dative arguments ────────────────────────────────────────────
+// A prepositional-frame verb GOVERNS its PP: `gostar de`, `pensar em`,
+// `depend on` bind their argument as oblique-of instead of leaving it a plain
+// modifier. The bare-proper-noun shape (`gostava da Daniela` — ADP+PROPN
+// chunks as no PP) is reached through the same between-token route the
+// passive agent uses.
+function addOblique(relations: Relation[], input: RelationInput, ci: number): void {
+  const vp = input.chunks[ci]!
+  const frame = frameOf(verbLemma(input.tokens, vp), input.syntax.valency)
+
+  switch (frame.kind === "some" && frame.value === "prepositional") {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const start = afterParentheticals(input.tokens, vp.to)
+  const candidate = firstChunkFrom(input.chunks, start)
+
+  switch (candidate.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const chunk = input.chunks[candidate.value]!
+
+  switch (punctuationBetween(input.tokens, start, chunk.from)) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  switch (chunk.kind) {
+    case "PP":
+      switch (chunk.from === start) {
+        case true:
+          relations.push(relation("oblique-of", chunk.head, vp.head, "heuristic"))
+          return
+        case false:
+          return
+      }
+    case "NP":
+      switch (adpositionBetween(input, start, chunk.from)) {
+        case true:
+          relations.push(relation("oblique-of", chunk.head, vp.head, "heuristic"))
+          return
+        case false:
+          return
+      }
+    case "VP":
+      return
+  }
+}
+
+function adpositionBetween(input: RelationInput, from: number, to: number): boolean {
+  for (let at = from; at < to; at++) {
+    const token = input.tokens[at]!
+
+    switch (token.role) {
+      case "punctuation":
+        continue
+      case "content":
+        break
+    }
+
+    switch (token.tagged.pos === "ADP") {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  return false
+}
+
+// A ditransitive's RECIPIENT: the dative-marked PP after the object (`deu o
+// livro A MARIA`, `entregou o caderno AO SACERDOTE`, `gave the book TO
+// MARY`), the bare name behind a dative marker, or — English only — the
+// double-object inversion (`gave MARY the book`: two adjacent postverbal NPs,
+// the first a person, flip to recipient + object).
+function addDative(relations: Relation[], input: RelationInput, ci: number): void {
+  const vp = input.chunks[ci]!
+  const frame = frameOf(verbLemma(input.tokens, vp), input.syntax.valency)
+
+  switch (frame.kind === "some" && frame.value === "ditransitive") {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  switch (reassignDoubleObject(relations, input, ci)) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  for (const [k, chunk] of input.chunks.entries()) {
+    switch (chunk.from >= vp.to && k !== ci) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    switch (punctuationBetween(input.tokens, vp.to, chunk.from)) {
+      case true:
+        return
+      case false:
+        break
+    }
+
+    switch (chunk.kind) {
+      case "PP": {
+        const opener = tokenLower(input.tokens[chunk.from]!)
+
+        switch (opener !== null && input.syntax.dativeMarkers.includes(opener!)) {
+          case true:
+            relations.push(relation("dative-of", chunk.head, vp.head, "heuristic"))
+            return
+          case false:
+            continue
+        }
+      }
+      case "NP": {
+        const before = chunk.from - 1
+
+        switch (before >= vp.to) {
+          case false:
+            continue
+          case true:
+            break
+        }
+
+        const marker = tokenLower(input.tokens[before]!)
+
+        switch (marker !== null && input.syntax.dativeMarkers.includes(marker!)) {
+          case true:
+            relations.push(relation("dative-of", chunk.head, vp.head, "heuristic"))
+            return
+          case false:
+            continue
+        }
+      }
+      case "VP":
+        continue
+    }
+  }
+}
+
+// `gave Mary the book`: the object rule grabbed Mary; two directly-adjacent
+// postverbal NPs with a person-shaped first one flip to recipient + object.
+function reassignDoubleObject(relations: Relation[], input: RelationInput, ci: number): boolean {
+  const vp = input.chunks[ci]!
+  const objIndex = relations.findIndex((r) => r.kind === "object-of" && r.head === vp.head)
+
+  switch (objIndex < 0) {
+    case true:
+      return false
+    case false:
+      break
+  }
+
+  const obj = relations[objIndex]!
+  const objChunkIndex = input.chunks.findIndex((c) => c.kind === "NP" && c.head === obj.dependent && c.from >= vp.to)
+
+  switch (objChunkIndex < 0) {
+    case true:
+      return false
+    case false:
+      break
+  }
+
+  const recipientToken = input.tokens[obj.dependent]!
+
+  // A person-shaped recipient: proper noun, pronoun, or a capitalized noun —
+  // English names often resolve through the plain NOUN table (`Mary`).
+  const person =
+    recipientToken.role === "content" &&
+    (recipientToken.tagged.pos === "PROPN" ||
+      recipientToken.tagged.pos === "PRON" ||
+      (recipientToken.tagged.pos === "NOUN" && /^[A-ZÀ-Ý]/.test(recipientToken.tagged.token.text)))
+
+  switch (person) {
+    case false:
+      return false
+    case true:
+      break
+  }
+
+  const second = adjacentNp(input, objChunkIndex)
+
+  switch (second.kind) {
+    case "none":
+      return false
+    case "some":
+      break
+  }
+
+  relations.splice(objIndex, 1)
+  relations.push(relation("dative-of", obj.dependent, vp.head, "heuristic"))
+  relations.push(relation("object-of", input.chunks[second.value]!.head, vp.head, "heuristic"))
+
+  return true
+}
+
 // Coordinated NPs share their relation: once `subject-of`/`object-of`/
 // `predicate-of` lands on one head of an `NP (, NP)* CONJ NP` chain, every
 // other head in the chain earns the same edge — `Maria e João chegaram`
@@ -1508,6 +2388,705 @@ function spreadsAcrossCoordination(kind: RelationKind): boolean {
       return true
     case "located-in":
       return false
+    case "oblique-of":
+      return false
+    case "dative-of":
+      return false
+    case "particle-of":
+      return false
+    case "vocative-of":
+      return false
+    case "appositive-of":
+      return false
+    case "compared-to":
+      return false
+    case "temporal-of":
+      return false
+    case "reflexive-of":
+      return false
+    case "adverbial-of":
+      return false
+  }
+}
+
+// ─── sentence post-passes ────────────────────────────────────────────────────
+// A comma-bound NP opening on an indefinite article renames the nominal
+// before it: `Daniela, UMA MULHER que conheci ao entrar` — the description IS
+// Daniela. The indefinite-article gate is what keeps list commas out
+// (`Rei, Daniela e Hellmanns` renames no one).
+function addAppositive(relations: Relation[], input: RelationInput, ci: number): void {
+  const b = input.chunks[ci]!
+  const opener = tokenLower(input.tokens[b.from]!)
+
+  switch (opener !== null && input.syntax.indefiniteArticles.includes(opener!)) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const a = input.chunks.find((c) => c.kind === "NP" && c.to === b.from - 1)
+
+  switch (a === undefined) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  switch (isComma(input.tokens[b.from - 1])) {
+    case false:
+      return
+    case true:
+      relations.push(relation("appositive-of", b.head, a!.head, "heuristic"))
+      return
+  }
+}
+
+// The addressed name stands OUTSIDE the clause's argument structure. Two
+// shapes: leading — a sentence-initial proper-noun NP closed by a comma
+// before a clause that cannot take it as subject (`Daniela, acho que...`,
+// where `acho` is 1st person, or a clause with its own subject); trailing — a
+// comma-preceded proper noun against the terminal (`Não chore, Daniela.`),
+// unless some relation already claimed it (an inverted `dizia Rei` never
+// reads as address).
+function addVocatives(relations: Relation[], input: RelationInput): void {
+  const first = input.chunks[0]
+
+  switch (first !== undefined && first!.kind === "NP" && first!.from === firstContentIndex(input.tokens)) {
+    case true:
+      addLeadingVocative(relations, input, 0)
+      break
+    case false:
+      break
+  }
+
+  addTrailingVocative(relations, input)
+}
+
+function firstContentIndex(tokens: readonly AnalyzedToken[]): number {
+  for (const [at, token] of tokens.entries()) {
+    switch (token.role) {
+      case "content":
+        return at
+      case "punctuation":
+        continue
+    }
+  }
+
+  return -1
+}
+
+function addLeadingVocative(relations: Relation[], input: RelationInput, ci: number): void {
+  const np = input.chunks[ci]!
+  const head = input.tokens[np.head]!
+
+  switch (head.role === "content" && head.tagged.pos === "PROPN" && isComma(input.tokens[np.to])) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const vp = input.chunks.find((c) => c.kind === "VP")
+
+  switch (vp === undefined) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const firstSecondOnly = unambiguousFirstSecond(contentFeat(input.tokens[vp!.head]!), input.syntax.verbFeats)
+
+  const otherSubject = relations.some(
+    (r) => r.kind === "subject-of" && r.head === vp!.head && r.dependent !== np.head,
+  )
+
+  switch (firstSecondOnly || otherSubject) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  for (let at = relations.length - 1; at >= 0; at--) {
+    const existing = relations[at]!
+
+    switch (existing.kind === "subject-of" && existing.dependent === np.head) {
+      case true:
+        relations.splice(at, 1)
+        continue
+      case false:
+        continue
+    }
+  }
+
+  relations.push(relation("vocative-of", np.head, vp!.head, "heuristic"))
+}
+
+function addTrailingVocative(relations: Relation[], input: RelationInput): void {
+  for (const [ci, np] of input.chunks.entries()) {
+    switch (np.kind === "NP" && np.to - np.from === 1) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const head = input.tokens[np.head]!
+
+    switch (head.role === "content" && head.tagged.pos === "PROPN") {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const commaBefore = np.from > 0 && isComma(input.tokens[np.from - 1])
+    const after = input.tokens[np.to]
+    const terminalAfter = after === undefined || (after.role === "punctuation" && isQuoteTransparentTerminal(after.token.text))
+
+    switch (commaBefore && terminalAfter) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const claimed = relations.some((r) => r.dependent === np.head || r.head === np.head)
+
+    switch (claimed) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    const vp = lastVpBefore(input.chunks, ci)
+
+    switch (vp.kind) {
+      case "none":
+        continue
+      case "some":
+        relations.push(relation("vocative-of", np.head, input.chunks[vp.value]!.head, "heuristic"))
+        continue
+    }
+  }
+}
+
+function isQuoteTransparentTerminal(text: string): boolean {
+  switch (text) {
+    case ".":
+      return true
+    case "!":
+      return true
+    case "?":
+      return true
+    case "…":
+      return true
+    default:
+      return false
+  }
+}
+
+function lastVpBefore(chunks: readonly Chunk[], ci: number): Optional<number> {
+  let best: Optional<number> = { kind: "none" }
+
+  for (let k = 0; k < ci; k++) {
+    switch (chunks[k]!.kind === "VP") {
+      case true:
+        best = { kind: "some", value: k }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
+}
+
+function contentFeat(token: AnalyzedToken): string {
+  switch (token.role) {
+    case "punctuation":
+      return ""
+    case "content":
+      return token.tagged.feat
+  }
+}
+
+// The possessive relative: in `o homem cujo gato sumiu` / `the man whose cat
+// vanished`, the noun after the relative is possessed by the antecedent —
+// modifier-of(homem -> gato), the same owner->owned shape the genitive and
+// the English 's build.
+function addPossessiveRelatives(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    const lower = tokenLower(token)
+
+    switch (lower !== null && input.syntax.possessiveRelatives.includes(lower!)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const antecedent = antecedentBefore(input, ti)
+
+    switch (antecedent.kind) {
+      case "none":
+        return
+      case "some":
+        break
+    }
+
+    const possessed = possessedNounAfter(input, ti)
+
+    switch (possessed.kind) {
+      case "none":
+        return
+      case "some":
+        relations.push(relation("modifier-of", antecedent.value, possessed.value, "heuristic"))
+        return
+    }
+  })
+}
+
+// The noun the possessive relative introduces: the head of its own chunk when
+// that chunk is a nominal headed elsewhere (`whose cat` chunks together), or
+// the head of the NP directly after it (`cujo` chunks alone as a pronoun).
+function possessedNounAfter(input: RelationInput, ti: number): Optional<number> {
+  const holder = input.chunks.find((c) => ti >= c.from && ti < c.to)
+
+  switch (holder !== undefined && holder!.kind === "NP" && holder!.head !== ti) {
+    case true:
+      return { kind: "some", value: holder!.head }
+    case false:
+      break
+  }
+
+  const next = input.chunks.find((c) => c.kind === "NP" && c.from === ti + 1)
+
+  switch (next === undefined) {
+    case true:
+      return { kind: "none" }
+    case false:
+      return { kind: "some", value: next!.head }
+  }
+}
+
+// The comparative scaffold: an adjective under a degree adverb (`mais alto`,
+// `more beautiful`) or carrying comparative morphology (`darker`, AGID CMP),
+// followed by the standard marker and its NP — the standard is what the
+// quality is measured against. One genitive-marker token may sit between
+// adjective and marker for the Portuguese `do que` contraction.
+function addComparatives(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    switch (token.role === "content" && token.tagged.pos === "ADJ") {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const degreeBefore = ti > 0 && hasDegreeAdverb(input, ti - 1)
+    const morphological = contentFeat(token).startsWith("COMP")
+
+    switch (degreeBefore || morphological) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    let at = ti + 1
+    const next = input.tokens[at]
+    const between = next === undefined ? null : tokenLower(next)
+
+    switch (between !== null && input.syntax.genitiveMarkers.includes(between!)) {
+      case true:
+        at++
+        break
+      case false:
+        break
+    }
+
+    const marker = input.tokens[at]
+
+    switch (marker !== undefined && tokenLower(marker!) !== null && input.syntax.thanMarkers.includes(tokenLower(marker!)!)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const standard = firstChunkFrom(input.chunks, at + 1)
+
+    switch (standard.kind) {
+      case "none":
+        return
+      case "some":
+        break
+    }
+
+    const chunk = input.chunks[standard.value]!
+
+    switch (punctuationBetween(input.tokens, at + 1, chunk.from)) {
+      case true:
+        return
+      case false:
+        relations.push(relation("compared-to", chunk.head, ti, "heuristic"))
+        return
+    }
+  })
+}
+
+function hasDegreeAdverb(input: RelationInput, at: number): boolean {
+  const lower = tokenLower(input.tokens[at]!)
+
+  return lower !== null && input.syntax.degreeAdverbs.includes(lower)
+}
+
+// An adverbial subordinate clause: a declared subordinator opening a clause
+// whose verb hangs off the matrix verb — `Chorou QUANDO o gato sumiu`,
+// `QUANDO a noite caiu, Rei saiu`. Mirrors the complement-of convention: the
+// dependent is the subordinator token, the clause's left edge. The `se`
+// homograph is position-gated: only a sentence-initial or post-punctuation
+// `se` subordinates (a verb-adjacent one is the clitic).
+function addSubordinateClauses(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    const lower = tokenLower(token)
+
+    switch (lower !== null && input.syntax.subordinators.includes(lower!)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    switch (lower === "se" && procliticPosition(input, ti)) {
+      case true:
+        return
+      case false:
+        break
+    }
+
+    const embedded = input.chunks.find((c) => c.kind === "VP" && c.from > ti)
+
+    switch (embedded === undefined || terminalBetween(input.tokens, ti, embedded!.from)) {
+      case true:
+        return
+      case false:
+        break
+    }
+
+    const matrix = matrixFor(input, ti, embedded!)
+
+    switch (matrix.kind) {
+      case "none":
+        return
+      case "some":
+        break
+    }
+
+    switch (matrix.value === embedded!.head) {
+      case true:
+        return
+      case false:
+        relations.push(relation("adverbial-of", ti, matrix.value, "heuristic"))
+        return
+    }
+  })
+}
+
+function procliticPosition(input: RelationInput, ti: number): boolean {
+  const before = ti - 1
+
+  return before >= 0 && input.tokens[before]!.role === "content"
+}
+
+// The matrix verb the subordinate clause modifies: the last VP before the
+// subordinator (`Chorou quando...`), or — for a clause-initial subordinator —
+// the first VP after the comma that closes the clause (`Quando a noite caiu,
+// Rei saiu`).
+function matrixFor(input: RelationInput, ti: number, embedded: Chunk): Optional<number> {
+  let before: Optional<number> = { kind: "none" }
+
+  for (const chunk of input.chunks) {
+    switch (chunk.kind === "VP" && chunk.to <= ti) {
+      case true:
+        before = { kind: "some", value: chunk.head }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  switch (before.kind) {
+    case "some":
+      return before
+    case "none":
+      break
+  }
+
+  const close = nextComma(input.tokens, embedded.to)
+
+  switch (close.kind) {
+    case "none":
+      return { kind: "none" }
+    case "some":
+      break
+  }
+
+  const matrix = input.chunks.find((c) => c.kind === "VP" && c.from > close.value)
+
+  switch (matrix === undefined) {
+    case true:
+      return { kind: "none" }
+    case false:
+      return { kind: "some", value: matrix!.head }
+  }
+}
+
+// Right-node raising, forward only: in `comprou e leu o livro` the first
+// conjunct is objectless and the second carries the shared object — the CONJ
+// gap says they read it together. The backward shape (`comprou o livro e
+// leu`) is an elision, not sharing, and stays with the discourse pass.
+function addSharedObjects(relations: Relation[], input: RelationInput): void {
+  input.chunks.forEach((chunk, ci) => {
+    switch (chunk.kind === "VP" && conjJoinsPreviousClause(input, ci)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const previous = previousVp(input.chunks, ci)
+
+    switch (previous.kind) {
+      case "none":
+        return
+      case "some":
+        break
+    }
+
+    const prevHead = input.chunks[previous.value]!.head
+
+    switch (takesObject(verbLemma(input.tokens, input.chunks[previous.value]!), input.syntax.valency)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const prevClaimed = relations.some(
+      (r) => (r.kind === "object-of" || r.kind === "complement-of") && r.head === prevHead,
+    )
+
+    switch (prevClaimed) {
+      case true:
+        return
+      case false:
+        break
+    }
+
+    const shared = relations.find((r) => r.kind === "object-of" && r.head === chunk.head)
+
+    switch (shared === undefined) {
+      case true:
+        return
+      case false:
+        relations.push(relation("object-of", shared!.dependent, prevHead, "heuristic"))
+        return
+    }
+  })
+}
+
+// The quote IS what the dicendi verb says: when the attribution inverted
+// (`..., dizia Rei` — subject after the verb, punctuation directly before
+// it), the sentence content before the boundary becomes the verb's clausal
+// complement, dependent on its leftmost content token, the same convention
+// complement-of always uses.
+function addQuoteContent(relations: Relation[], input: RelationInput): void {
+  input.chunks.forEach((chunk) => {
+    switch (chunk.kind === "VP" && input.syntax.dicendi.includes(verbLemma(input.tokens, chunk))) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const inverted = relations.some(
+      (r) => r.kind === "subject-of" && r.head === chunk.head && r.dependent > chunk.head,
+    )
+
+    const claimed = relations.some((r) => r.kind === "complement-of" && r.head === chunk.head)
+
+    switch (inverted && claimed === false) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const boundary = chunk.from - 1
+
+    switch (boundary >= 0 && input.tokens[boundary]!.role === "punctuation") {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const first = firstContentIndex(input.tokens)
+
+    switch (first >= 0 && first < boundary) {
+      case true:
+        relations.push(relation("complement-of", first, chunk.head, "heuristic"))
+        return
+      case false:
+        return
+    }
+  })
+}
+
+// A sentence-opening time NP closed by a comma frames the whole clause:
+// `Uma vez, ao sair do ônibus, encontrei...` — temporal-of(vez -> encontrei).
+function addTemporalOpeners(relations: Relation[], input: RelationInput): void {
+  const first = input.chunks[0]
+
+  switch (first !== undefined && first!.kind === "NP" && isComma(input.tokens[first!.to])) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const head = input.tokens[first!.head]!
+
+  switch (head.role === "content" && input.syntax.temporalNouns.includes(head.tagged.lemma.toLowerCase())) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const vp = input.chunks.find((c) => c.kind === "VP")
+
+  switch (vp === undefined) {
+    case true:
+      return
+    case false:
+      relations.push(relation("temporal-of", first!.head, vp!.head, "heuristic"))
+      return
+  }
+}
+
+// The polarity pass: a declared negator riding a VP (inside it before the
+// head — `did not see` — or directly before it across at most adverbs —
+// `não era`, `nunca mais voltou`) flips every relation that VP heads, and
+// the flip follows complement chains onto chained verb forms
+// (`não era compartilhada`).
+function applyPolarity(relations: readonly Relation[], input: RelationInput): readonly Relation[] {
+  const negated = new Set<number>()
+
+  for (const chunk of input.chunks) {
+    switch (chunk.kind) {
+      case "VP":
+        break
+      case "NP":
+        continue
+      case "PP":
+        continue
+    }
+
+    switch (negatorTouches(input, chunk)) {
+      case true:
+        negated.add(chunk.head)
+        break
+      case false:
+        break
+    }
+  }
+
+  for (let pass = 0; pass < 3; pass++) {
+    for (const r of relations) {
+      const chained = r.kind === "complement-of" && negated.has(r.head) && isVerbToken(input.tokens[r.dependent]!)
+
+      switch (chained) {
+        case true:
+          negated.add(r.dependent)
+          break
+        case false:
+          break
+      }
+    }
+  }
+
+  return relations.map((r) => {
+    switch (negated.has(r.head)) {
+      case true:
+        return { ...r, polarity: "negative" as const }
+      case false:
+        return r
+    }
+  })
+}
+
+function negatorTouches(input: RelationInput, chunk: Chunk): boolean {
+  for (let at = chunk.from; at < chunk.head; at++) {
+    switch (isNegator(input, at)) {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  let at = chunk.from - 1
+  let steps = 0
+
+  while (at >= 0 && steps < 3) {
+    const token = input.tokens[at]!
+
+    switch (token.role) {
+      case "punctuation":
+        return false
+      case "content":
+        break
+    }
+
+    switch (isNegator(input, at)) {
+      case true:
+        return true
+      case false:
+        break
+    }
+
+    switch (token.tagged.pos === "ADV") {
+      case true:
+        at--
+        steps++
+        continue
+      case false:
+        return false
+    }
+  }
+
+  return false
+}
+
+function isNegator(input: RelationInput, at: number): boolean {
+  const lower = tokenLower(input.tokens[at]!)
+
+  return lower !== null && input.syntax.negators.includes(lower)
+}
+
+function isVerbToken(token: AnalyzedToken): boolean {
+  switch (token.role) {
+    case "punctuation":
+      return false
+    case "content":
+      return token.tagged.pos === "VERB"
   }
 }
 
@@ -1748,5 +3327,5 @@ function isAdjective(token: AnalyzedToken): boolean {
 }
 
 function relation(kind: RelationKind, dependent: number, head: number, provenance: RelationProvenance): Relation {
-  return { kind, dependent, head, provenance }
+  return { kind, dependent, head, provenance, polarity: "affirmative" }
 }

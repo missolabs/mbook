@@ -350,6 +350,10 @@ function claimsObject(relation: Relation, head: number): boolean {
       return relation.head === head
     case "complement-of":
       return relation.head === head
+    // The se-construction claims its verb: `abraçaram-se` and `vivia-se bem`
+    // elide nothing.
+    case "reflexive-of":
+      return relation.head === head
     case "subject-of":
       return false
     case "modifier-of":
@@ -359,6 +363,22 @@ function claimsObject(relation: Relation, head: number): boolean {
     case "agent-of":
       return false
     case "located-in":
+      return false
+    case "oblique-of":
+      return false
+    case "dative-of":
+      return false
+    case "particle-of":
+      return false
+    case "vocative-of":
+      return false
+    case "appositive-of":
+      return false
+    case "compared-to":
+      return false
+    case "temporal-of":
+      return false
+    case "adverbial-of":
       return false
   }
 }

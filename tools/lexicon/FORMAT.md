@@ -52,7 +52,7 @@ mirror of this document. `tools/lexicon/format/encode.ts` is the writer.
 | field         | type      | value / meaning                          |
 |---------------|-----------|------------------------------------------|
 | magic         | u8[4]     | `4D 42 4C 58` = ASCII `"MBLX"`           |
-| version       | u32       | `4`                                      |
+| version       | u32       | `5`                                      |
 | langLen       | u8        | byte length of `lang`                    |
 | lang          | u8[langLen] | UTF-8 language tag (`"pt-BR"`, `"en"`)  |
 | variantScheme | u8        | `VariantScheme`                          |
@@ -168,6 +168,22 @@ object (not a packed table). Schema (`SyntaxData` in `format/model.ts`):
   "expletives": ["there"],      // existential dummies licensing a postverbal copular subject
   "dicendi": ["say"],           // verb-of-saying lemmas: attribution inverts around them
                                 // ("said Holmes"), a postverbal proper noun is the SUBJECT
+  "dativeMarkers": ["to"],      // adpositions opening a ditransitive's recipient PP
+  "negators": ["not"],          // words flipping clause polarity when riding its verb
+  "anaphoricPronouns": [        // 3rd-person referring pronouns + agreement demanded
+    { "form": "she", "feat": "fs" } ],  //   of the antecedent ("" = no demand)
+  "possessivePronouns": ["his"],// possessives whose owner is discourse-given
+  "accusativeClitics": ["me"],  // clitic riding a verb IS its object
+  "dativeClitics": ["lhe"],     // clitic riding a verb is its recipient
+  "reflexiveClitics": ["se"],   // reflexive/reciprocal/se-passive marker
+  "subordinators": ["when"],    // conjunctions opening an adverbial clause
+  "possessiveRelatives": ["whose"], // the noun after them is possessed by the antecedent
+  "definiteArticles": ["the"],  // coreference: definite NP resumes a known entity
+  "indefiniteArticles": ["a"],  // coreference: indefinite NP introduces one
+  "temporalNouns": ["night"],   // adjuncts headed by these attach as temporal-of
+  "particles": ["up"],          // verb-particle units ("gave up"); [] in pt
+  "degreeAdverbs": ["more"],    // comparative scaffold: degree word on the adjective...
+  "thanMarkers": ["than"],      // ...and the marker introducing the standard
   "verbFeats": {                // morphology-code prefixes, in this dict's feat vocabulary
     "finitePrefixes":     ["..."],
     "infinitivePrefixes": ["..."],
@@ -187,7 +203,7 @@ A reader may verify the trailer as an integrity/truncation check.
 
 ## Lookup algorithm (reference)
 
-1. Verify header magic and `version == 4`; read metadata.
+1. Verify header magic and `version == 5`; read metadata.
 2. Load the offset tables (sections 3–4) and keep `entriesBase` and the two
    pools addressable.
 3. `lookup(form)`: UTF-8-encode `form`; binary-search `formOffsets`/`formBlob`
@@ -210,6 +226,10 @@ History: v2 grew the syntax JSON schema (`relativePronouns`,
 `passiveAuxiliaries`, `agentMarkers`, `expletives`,
 `verbFeats.participlePrefixes`); v3 added `relativePlaceAdverbs` and
 `genitiveMarkers`; v4 added `dicendi` (verb-of-saying lemmas for quotative
-inversion). The binary layout is unchanged since v1, but the schema is
+inversion); v5 added the argument-structure and discourse lists
+(`dativeMarkers`, `negators`, `anaphoricPronouns`, `possessivePronouns`, the
+three clitic classes, `subordinators`, article definiteness, `temporalNouns`,
+`particles`, the comparative pair) and `verbFeats.gerundPrefixes`. The binary
+layout is unchanged since v1, but the schema is
 part of the reader contract — an engine handed an older dict would read
 `undefined` where it expects those lists — so the version gates it.

@@ -322,7 +322,7 @@ function entryTag(token: SourceToken, entry: Entry, provenance: Provenance): Tag
   return { token, lemma: entry.lemma, pos: entry.pos, feat: entry.feat, provenance }
 }
 
-type FormClass = "any" | "finite" | "infinitive" | "participle"
+type FormClass = "any" | "finite" | "infinitive" | "participle" | "gerund"
 
 type Person = "any" | "third"
 
@@ -375,7 +375,11 @@ const CONTEXT_RULES: readonly ContextRule[] = [
   { prev: "ADP", prefer: "VERB", form: "infinitive", person: "any", feat: "any", bond: "any" },
   { prev: "ADP", prefer: "NOUN", form: "any", person: "any", feat: "any", bond: "any" },
   { prev: "PRON", prefer: "VERB", form: "infinitive", person: "any", feat: "any", bond: "any" },
-  { prev: "PRON", prefer: "VERB", form: "any", person: "any", feat: "any", bond: "clause-mate" },
+  // person "third": after an enclitic (`Vendem-se CASAS`) the next word is
+  // NOT the pronoun's verb, and the junk 2nd-person homograph (casar P2s)
+  // must not win; genuine 1st-person verbs after `eu` resolve through the
+  // valency-hinted priority pick instead.
+  { prev: "PRON", prefer: "VERB", form: "any", person: "third", feat: "any", bond: "clause-mate" },
   { prev: "NOUN", prefer: "VERB", form: "finite", person: "third", feat: "any", bond: "clause-mate" },
   { prev: "NOUN", prefer: "ADJ", form: "any", person: "any", feat: "marked", bond: "any" },
   { prev: "PROPN", prefer: "VERB", form: "finite", person: "third", feat: "any", bond: "clause-mate" },
@@ -383,9 +387,16 @@ const CONTEXT_RULES: readonly ContextRule[] = [
   { prev: "AUX", prefer: "VERB", form: "infinitive", person: "any", feat: "any", bond: "any" },
   { prev: "VERB", prefer: "VERB", form: "participle", person: "any", feat: "any", bond: "any" },
   { prev: "AUX", prefer: "VERB", form: "participle", person: "any", feat: "any", bond: "any" },
+  // The progressive periphrasis: `was RUNNING` must beat the -ing noun.
+  { prev: "VERB", prefer: "VERB", form: "gerund", person: "any", feat: "any", bond: "any" },
+  { prev: "AUX", prefer: "VERB", form: "gerund", person: "any", feat: "any", bond: "any" },
   { prev: "VERB", prefer: "ADV", form: "any", person: "any", feat: "any", bond: "any" },
   { prev: "ADV", prefer: "ADV", form: "any", person: "any", feat: "any", bond: "any" },
   { prev: "ADV", prefer: "VERB", form: "any", person: "any", feat: "any", bond: "any" },
+  // A degree/manner adverb grades an adjective (`mais ALTA`, `tão calmo`) —
+  // after the verb reading fails, the marked-ADJ reading beats the bare-noun
+  // priority (alta the noun would otherwise win).
+  { prev: "ADV", prefer: "ADJ", form: "any", person: "any", feat: "marked", bond: "any" },
 ]
 
 function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: SyntaxData): Entry {
@@ -504,6 +515,8 @@ function formMatches(form: FormClass, feat: string, marks: VerbFeatMarks): boole
       return hasPrefix(feat, marks.infinitivePrefixes)
     case "participle":
       return hasPrefix(feat, marks.participlePrefixes)
+    case "gerund":
+      return hasPrefix(feat, marks.gerundPrefixes)
   }
 }
 
