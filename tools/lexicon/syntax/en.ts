@@ -263,6 +263,28 @@ export const EN_SYNTAX: SyntaxData = {
     { verb: "give", noun: "laugh", lemma: "laugh" },
   ],
   locativeMarkers: ["in", "at", "into", "to", "from", "toward", "towards"],
+  placeHeadNouns: [
+    "city", "town", "street", "square", "bar", "café", "village", "country",
+    "avenue", "station", "beach", "harbor", "harbour", "road", "port",
+  ],
+  timeConnectives: [
+    { form: "then", role: "advance" },
+    { form: "afterwards", role: "advance" },
+    { form: "later", role: "advance" },
+    { form: "finally", role: "advance" },
+    { form: "earlier", role: "retreat" },
+  ],
+  subordinatorTime: [
+    { form: "when", edge: "sub-meets-matrix" },
+    { form: "once", edge: "sub-meets-matrix" },
+    { form: "while", edge: "matrix-during-sub" },
+    { form: "because", edge: "sub-before-matrix" },
+    { form: "until", edge: "matrix-meets-sub" },
+    { form: "although", edge: "none" },
+    { form: "though", edge: "none" },
+    { form: "if", edge: "none" },
+    { form: "unless", edge: "none" },
+  ],
   // AGID/Moby codes: PAST, 3SG and FIN are finite ("PAST" also prefixes
   // PASTPART — an accepted over-match, since a participle-only homograph with a
   // noun reading is vanishingly rare). The English infinitive is the bare base

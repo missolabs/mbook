@@ -92,7 +92,7 @@ export function decodeDictionary(data: Uint8Array): Result<DictHandle, string> {
 
   const version = readU32(c)
 
-  switch (version === 6) {
+  switch (version === 7) {
     case false:
       return err(`unsupported format version ${version}`)
     case true:

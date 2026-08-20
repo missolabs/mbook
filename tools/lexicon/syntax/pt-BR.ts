@@ -321,6 +321,30 @@ export const PT_BR_SYNTAX: SyntaxData = {
   // Adpositions that govern places — the em-family and directionals; the
   // de-family stays out (a genitive `de Rei` types no one as geography).
   locativeMarkers: ["em", "no", "na", "nos", "nas", "para", "até", "ao", "à", "aos", "às"],
+  // Heads whose genitive/appositive names a place by grammar: `a cidade de S`.
+  placeHeadNouns: [
+    "cidade", "rua", "praça", "bar", "café", "vila", "país", "bairro",
+    "avenida", "estação", "praia", "cais", "porto", "aldeia", "estrada",
+  ],
+  // Discourse time adverbs (sentence-initial) and the temporal subordinators'
+  // clause-order assertions — the timeline pass's lexicon.
+  timeConnectives: [
+    { form: "depois", role: "advance" },
+    { form: "então", role: "advance" },
+    { form: "logo", role: "advance" },
+    { form: "enfim", role: "advance" },
+    { form: "antes", role: "retreat" },
+  ],
+  subordinatorTime: [
+    { form: "quando", edge: "sub-meets-matrix" },
+    { form: "mal", edge: "sub-meets-matrix" },
+    { form: "enquanto", edge: "matrix-during-sub" },
+    { form: "conforme", edge: "matrix-during-sub" },
+    { form: "porque", edge: "sub-before-matrix" },
+    { form: "embora", edge: "none" },
+    { form: "caso", edge: "none" },
+    { form: "se", edge: "none" },
+  ],
   // DELAF tense letters: P/I/J/F/Q presente..mais-que-perfeito, C condicional,
   // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio;
   // G gerúndio (the progressive/manner chains: `estava correndo`, `saiu correndo`).

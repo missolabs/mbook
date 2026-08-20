@@ -902,3 +902,89 @@ describe("light verbs, tense senses and the name shape", () => {
     expect(tagged(sentence, "Bar").pos).toBe("PROPN")
   })
 })
+
+describe("the timeline: deterministic event ordering", () => {
+  function edgeWords(text: string) {
+    const analysis = analyze(text)
+
+    const at = (si: number, ti: number): string => {
+      const t = analysis.sentences[si]!.tokens[ti]!
+
+      switch (t.role) {
+        case "content":
+          return t.tagged.token.text
+        case "punctuation":
+          return t.token.text
+      }
+    }
+
+    return analysis.timeline.edges.map(
+      (e) => `${e.kind}:${at(e.fromSentence, e.fromToken)}->${at(e.toSentence, e.toToken)}:${e.provenance}`,
+    )
+  }
+
+  function lanes(text: string) {
+    const analysis = analyze(text)
+
+    const at = (si: number, ti: number): string => {
+      const t = analysis.sentences[si]!.tokens[ti]!
+
+      switch (t.role) {
+        case "content":
+          return t.tagged.token.text
+        case "punctuation":
+          return t.token.text
+      }
+    }
+
+    return analysis.timeline.events.map((e) => `${at(e.sentence, e.token)}:${e.lane}`)
+  }
+
+  it("successive perfectives chain — the narrative convention", () => {
+    expect(edgeWords("Rei chegou ao bar. Sentou na cadeira. Abriu o caderno.")).toEqual([
+      "before:chegou->Sentou:narrative-advance",
+      "before:Sentou->Abriu:narrative-advance",
+    ])
+  })
+
+  it("an imperfective is background the event happens INSIDE", () => {
+    expect(edgeWords("Chovia naquela noite. Rei entrou no bar.")).toEqual([
+      "during:entrou->Chovia:tense-anaphora",
+    ])
+  })
+
+  it("the perfect chain is a flashback — before the reference, advancing nothing", () => {
+    expect(edgeWords("Rei chegou cansado. Tinha perdido o gato.")).toEqual([
+      "before:perdido->chegou:tense-anaphora",
+    ])
+  })
+
+  it("a temporal subordinator orders its clause and keeps it OFF the chain", () => {
+    expect(edgeWords("Chorou quando o gato sumiu.")).toEqual(["meets:sumiu->Chorou:connective"])
+  })
+
+  it("a retreat adverb flips the sentence backward", () => {
+    expect(edgeWords("Rei abriu a porta. Antes, fechou a janela.")).toEqual([
+      "before:fechou->abriu:connective",
+    ])
+  })
+
+  it("negation, present commentary and subjunctives never order anything", () => {
+    const text = "Rei não abriu a porta. Acho que talvez chovesse."
+
+    expect(lanes(text)).toEqual(["abriu:negated", "Acho:offline", "chovesse:irrealis"])
+    expect(edgeWords(text)).toEqual([])
+  })
+
+  it("speech lives on its own lane", () => {
+    const analysis = analyze("— Rei abriu a porta e fugiu!")
+
+    expect(analysis.timeline.events.length).toBeGreaterThan(0)
+
+    for (const event of analysis.timeline.events) {
+      expect(event.lane).toBe("speech")
+    }
+
+    expect(analysis.timeline.edges).toEqual([])
+  })
+})

@@ -29,6 +29,7 @@ import { analyzeParagraph } from "./pipeline"
 import type { ParagraphAnalysis, Sentence } from "./pipeline"
 import { linkAcrossParagraphs } from "./dataflow"
 import type { DiscourseLinkKind, DiscourseProvenance } from "./dataflow"
+import type { TimelineEdgeKind, TimelineEvent, TimelineProvenance } from "./timeline"
 import { readLanguage } from "./language"
 import type { Language } from "./language"
 import type { Lexicon } from "./lexicon"
@@ -68,11 +69,29 @@ export type BookLink = {
   provenance: DiscourseProvenance
 }
 
-// A proper name outside the cast, typed by the grammar that governs it: a
-// name a locative adposition ever introduces (`para S.`, `no B Bar`, `in
-// Tokyo`) is a PLACE; the rest stay honestly unknown. Persons are the cast's
-// business, not this pass's.
-export type EntityKind = "place" | "unknown"
+// A timeline edge crossing a paragraph boundary: the last perfective of one
+// paragraph precedes the first perfective of the next — the narrative
+// convention carried over the block break.
+export type BookTimelineEdge = {
+  kind: TimelineEdgeKind
+  fromParagraph: number
+  fromSentence: number
+  fromToken: number
+  toParagraph: number
+  toSentence: number
+  toToken: number
+  provenance: TimelineProvenance
+}
+
+// A proper name outside the cast, typed by ORDERED evidence — strongest rule
+// that fires wins, and nothing firing stays honestly unknown:
+//   1. person — the name SAYS something (subject of a dicendi verb) or is
+//      ADDRESSED (vocative);
+//   2. place — a typed head noun claims it by grammar (`a cidade de S`,
+//      appositive `S, uma cidade fria`);
+//   3. place — a locative adposition governs it (`no B Bar`), unless the
+//      mention sits inside quote marks (a quoted title names no geography).
+export type EntityKind = "person" | "place" | "unknown"
 
 export type NamedEntity = {
   name: string
@@ -88,6 +107,7 @@ export type BookAnalysis = {
   unresolved: readonly string[]
   bookLinks: readonly BookLink[]
   entities: readonly NamedEntity[]
+  timelineEdges: readonly BookTimelineEdge[]
 }
 
 export type BookAnalysisError = { kind: "lexicon-unavailable"; language: Language }
@@ -130,15 +150,85 @@ export function analyzeBook(
     unresolved: unresolvedNames(spans),
     bookLinks: crossParagraphLinks(paragraphs, lexicon.value),
     entities: nameEntities(paragraphs, cast, lexicon.value),
+    timelineEdges: stitchTimelines(paragraphs),
   })
 }
 
-// Every proper-noun NP outside the cast, aggregated by surface name, with a
-// locative vote per mention a declared place-governing adposition introduces.
-// One vote suffices: a name the prose ever moves TO or dwells IN is a place.
+// The narrative chain over block boundaries: adjacent paragraphs' perfective
+// anchors join with a before-edge — the same advancement rule, one level up.
+function stitchTimelines(paragraphs: readonly ParagraphSlot[]): readonly BookTimelineEdge[] {
+  const out: BookTimelineEdge[] = []
+
+  for (let i = 1; i < paragraphs.length; i++) {
+    const prev = paragraphs[i - 1]!
+    const curr = paragraphs[i]!
+
+    const from = lastPerfective(prev.analysis.timeline.events)
+    const to = firstPerfective(curr.analysis.timeline.events)
+
+    switch (from.kind === "some" && to.kind === "some") {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const a = (from as { value: TimelineEvent }).value
+    const b = (to as { value: TimelineEvent }).value
+
+    out.push({
+      kind: "before",
+      fromParagraph: prev.index,
+      fromSentence: a.sentence,
+      fromToken: a.token,
+      toParagraph: curr.index,
+      toSentence: b.sentence,
+      toToken: b.token,
+      provenance: "narrative-advance",
+    })
+  }
+
+  return out
+}
+
+function firstPerfective(events: readonly TimelineEvent[]): Optional<TimelineEvent> {
+  for (const event of events) {
+    switch (event.lane === "narrative" && event.effect === "perfective") {
+      case true:
+        return { kind: "some", value: event }
+      case false:
+        continue
+    }
+  }
+
+  return { kind: "none" }
+}
+
+function lastPerfective(events: readonly TimelineEvent[]): Optional<TimelineEvent> {
+  let best: Optional<TimelineEvent> = { kind: "none" }
+
+  for (const event of events) {
+    switch (event.lane === "narrative" && event.effect === "perfective") {
+      case true:
+        best = { kind: "some", value: event }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
+}
+
+// Every proper-noun NP outside the cast, aggregated by surface name; each
+// mention contributes ORDERED evidence and the strongest kind ever seen
+// decides. Mentions inside quote marks contribute no evidence at all — a
+// quoted title names no one and no place.
+type EntityEvidence = { mentions: number; person: number; typedPlace: number; locative: number }
+
 function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon: Lexicon): readonly NamedEntity[] {
   const castNames = new Set(cast.characters.map((c) => c.name))
-  const tally = new Map<string, { mentions: number; locative: number }>()
+  const tally = new Map<string, EntityEvidence>()
 
   for (const slot of paragraphs) {
     for (const sentence of slot.analysis.sentences) {
@@ -159,8 +249,19 @@ function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon:
             break
         }
 
-        const entry = tally.get(name.value) ?? { mentions: 0, locative: 0 }
+        const entry = tally.get(name.value) ?? { mentions: 0, person: 0, typedPlace: 0, locative: 0 }
         entry.mentions += 1
+
+        switch (insideQuotes(sentence, chunk.from)) {
+          case true:
+            tally.set(name.value, entry)
+            continue
+          case false:
+            break
+        }
+
+        entry.person += personEvidence(sentence, chunk, lexicon.syntax) ? 1 : 0
+        entry.typedPlace += typedPlaceEvidence(sentence, chunk, lexicon.syntax) ? 1 : 0
         entry.locative += locativeBefore(sentence, chunk, lexicon.syntax.locativeMarkers) ? 1 : 0
         tally.set(name.value, entry)
       }
@@ -170,10 +271,161 @@ function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon:
   const out: NamedEntity[] = []
 
   for (const [name, entry] of tally) {
-    out.push({ name, kind: entry.locative > 0 ? "place" : "unknown", mentions: entry.mentions })
+    out.push({ name, kind: entityKind(entry), mentions: entry.mentions })
   }
 
   return out
+}
+
+// Strict precedence, never a vote count: a name that SPEAKS is a person no
+// matter how often it is travelled to.
+function entityKind(entry: EntityEvidence): EntityKind {
+  switch (entry.person > 0) {
+    case true:
+      return "person"
+    case false:
+      break
+  }
+
+  switch (entry.typedPlace > 0 || entry.locative > 0) {
+    case true:
+      return "place"
+    case false:
+      return "unknown"
+  }
+}
+
+// The name says something (subject of a verb of saying) or is addressed.
+function personEvidence(sentence: Sentence, chunk: { head: number }, syntax: Lexicon["syntax"]): boolean {
+  for (const r of sentence.relations) {
+    switch (r.kind === "vocative-of" && r.dependent === chunk.head) {
+      case true:
+        return true
+      case false:
+        break
+    }
+
+    const says =
+      r.kind === "subject-of" &&
+      r.dependent === chunk.head &&
+      syntax.dicendi.includes(lemmaOf(sentence, r.head))
+
+    switch (says) {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  return false
+}
+
+// A typed head noun claims the name: genitive (`a CIDADE de S` — head noun,
+// then genitive marker, then the name) or appositive (`S, uma CIDADE fria`).
+function typedPlaceEvidence(sentence: Sentence, chunk: { from: number; head: number }, syntax: Lexicon["syntax"]): boolean {
+  const marker = chunk.from - 1
+  const head = chunk.from - 2
+
+  const genitive =
+    head >= 0 &&
+    wordOf(sentence, marker) !== null &&
+    syntax.genitiveMarkers.includes(wordOf(sentence, marker)!) &&
+    syntax.placeHeadNouns.includes(lemmaOf(sentence, head))
+
+  switch (genitive) {
+    case true:
+      return true
+    case false:
+      break
+  }
+
+  return sentence.relations.some(
+    (r) =>
+      r.kind === "appositive-of" &&
+      r.head === chunk.head &&
+      syntax.placeHeadNouns.includes(lemmaOf(sentence, r.dependent)),
+  )
+}
+
+// An odd number of quote marks before the chunk means it sits inside a
+// quotation.
+function insideQuotes(sentence: Sentence, before: number): boolean {
+  let depth = 0
+
+  for (let at = 0; at < before; at++) {
+    const token = sentence.tokens[at]!
+
+    switch (token.role) {
+      case "content":
+        continue
+      case "punctuation":
+        break
+    }
+
+    switch (isQuoteText(token.token.text)) {
+      case true:
+        depth += 1
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return depth % 2 === 1
+}
+
+function isQuoteText(text: string): boolean {
+  switch (text) {
+    case "“":
+      return true
+    case "”":
+      return true
+    case "\"":
+      return true
+    case "«":
+      return true
+    case "»":
+      return true
+    default:
+      return false
+  }
+}
+
+function lemmaOf(sentence: Sentence, index: number): string {
+  const token = sentence.tokens[index]
+
+  switch (token === undefined) {
+    case true:
+      return ""
+    case false:
+      break
+  }
+
+  switch (token!.role) {
+    case "content":
+      return token!.tagged.lemma
+    case "punctuation":
+      return ""
+  }
+}
+
+function wordOf(sentence: Sentence, index: number): string | null {
+  const token = sentence.tokens[index]
+
+  switch (token === undefined) {
+    case true:
+      return null
+    case false:
+      break
+  }
+
+  switch (token!.role) {
+    case "content":
+      return token!.tagged.token.text.toLowerCase()
+    case "punctuation":
+      return null
+  }
 }
 
 // An NP whose every content token is a PROPN — the name is their joined text.

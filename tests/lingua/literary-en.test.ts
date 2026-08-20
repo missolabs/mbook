@@ -451,3 +451,38 @@ describe("dialogue tails, light verbs and the timeline", () => {
     expect(verbTense("PROG", marks)).toEqual({ kind: "some", value: "gerund" })
   })
 })
+
+describe("the timeline in English", () => {
+  function edgeWords(text: string) {
+    const analysis = analyze(text)
+
+    const at = (si: number, ti: number): string => {
+      const t = analysis.sentences[si]!.tokens[ti]!
+
+      switch (t.role) {
+        case "content":
+          return t.tagged.token.text
+        case "punctuation":
+          return t.token.text
+      }
+    }
+
+    return analysis.timeline.edges.map(
+      (e) => `${e.kind}:${at(e.fromSentence, e.fromToken)}->${at(e.toSentence, e.toToken)}:${e.provenance}`,
+    )
+  }
+
+  it("chains perfectives and reads the perfect as a flashback", () => {
+    expect(edgeWords("The rain fell. She had left.")).toEqual(["before:left->fell:tense-anaphora"])
+
+    expect(edgeWords("She arrived. She sat. She wrote.")).toEqual([
+      "before:arrived->sat:narrative-advance",
+      "before:sat->wrote:narrative-advance",
+    ])
+  })
+
+  it("when meets, while wraps", () => {
+    expect(edgeWords("She wept when the cat vanished.")).toEqual(["meets:vanished->wept:connective"])
+    expect(edgeWords("She wept while the rain fell.")).toEqual(["during:wept->fell:connective"])
+  })
+})

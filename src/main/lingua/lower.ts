@@ -80,11 +80,41 @@ export type DiscourseLinkRow = {
   provenance: string
 }
 
+// Timeline rows, in the same analysis coordinates the discourse links use.
+export type TimelineEventRow = {
+  paragraphIdx: number
+  sentenceIdx: number
+  tokenIdx: number
+  lane: string
+  sense: string
+  effect: string
+}
+
+export type TimelineEdgeRow = {
+  fromParagraphIdx: number
+  fromSentenceIdx: number
+  fromTokenIdx: number
+  toParagraphIdx: number
+  toSentenceIdx: number
+  toTokenIdx: number
+  kind: string
+  provenance: string
+}
+
+export type EntityRow = {
+  name: string
+  kind: string
+  mentions: number
+}
+
 export type AnalysisRows = {
   characters: readonly CharacterRow[]
   sentences: readonly SentenceRow[]
   spans: readonly SpanRow[]
   discourseLinks: readonly DiscourseLinkRow[]
+  timelineEvents: readonly TimelineEventRow[]
+  timelineEdges: readonly TimelineEdgeRow[]
+  entities: readonly EntityRow[]
 }
 
 export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
@@ -125,9 +155,53 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
     })
   }
 
+  const timelineEvents: TimelineEventRow[] = []
+  const timelineEdges: TimelineEdgeRow[] = []
+
+  for (const slot of analysis.paragraphs) {
+    for (const event of slot.analysis.timeline.events) {
+      timelineEvents.push({
+        paragraphIdx: slot.index,
+        sentenceIdx: event.sentence,
+        tokenIdx: event.token,
+        lane: event.lane,
+        sense: event.sense,
+        effect: event.effect,
+      })
+    }
+
+    for (const e of slot.analysis.timeline.edges) {
+      timelineEdges.push({
+        fromParagraphIdx: slot.index,
+        fromSentenceIdx: e.fromSentence,
+        fromTokenIdx: e.fromToken,
+        toParagraphIdx: slot.index,
+        toSentenceIdx: e.toSentence,
+        toTokenIdx: e.toToken,
+        kind: e.kind,
+        provenance: e.provenance,
+      })
+    }
+  }
+
+  for (const e of analysis.timelineEdges) {
+    timelineEdges.push({
+      fromParagraphIdx: e.fromParagraph,
+      fromSentenceIdx: e.fromSentence,
+      fromTokenIdx: e.fromToken,
+      toParagraphIdx: e.toParagraph,
+      toSentenceIdx: e.toSentence,
+      toTokenIdx: e.toToken,
+      kind: e.kind,
+      provenance: e.provenance,
+    })
+  }
+
+  const entities = analysis.entities.map((e) => ({ name: e.name, kind: e.kind, mentions: e.mentions }))
+
   const spans = analysis.spans.map(spanRow)
 
-  return { characters, sentences, spans, discourseLinks }
+  return { characters, sentences, spans, discourseLinks, timelineEvents, timelineEdges, entities }
 }
 
 function sentenceRow(sentence: Sentence, location: SentenceLocation, paragraphIdx: number, idx: number): SentenceRow {

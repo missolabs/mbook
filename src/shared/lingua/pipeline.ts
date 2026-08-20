@@ -24,6 +24,8 @@ import { parsePhrases } from "./parser"
 import type { Chunk } from "./parser"
 import { linkDiscourse } from "./dataflow"
 import type { DiscourseLink } from "./dataflow"
+import { buildTimeline } from "./timeline"
+import type { Timeline } from "./timeline"
 import type { Language } from "./language"
 import { variantScope } from "./language"
 import type { Lexicon } from "./lexicon"
@@ -80,6 +82,7 @@ export type ParagraphAnalysis = {
   sentences: readonly Sentence[]
   spans: readonly AnchoredSpan[]
   discourse: readonly DiscourseLink[]
+  timeline: Timeline
 }
 
 export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
@@ -117,8 +120,10 @@ export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
   // backend both read.
   const spans = input.spans.map((span) => ({ span, anchor: anchorSpan(span, sentences) }))
 
-  // Cross-statement dataflow closes the paragraph.
+  // Cross-statement dataflow closes the paragraph, and the timeline pass
+  // orders its events — the block-local partial order.
   const discourse = linkDiscourse({ sentences, spans, syntax: input.lexicon.syntax })
+  const timeline = buildTimeline({ sentences, syntax: input.lexicon.syntax })
 
   return {
     text: input.text,
@@ -127,6 +132,7 @@ export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
     sentences,
     spans,
     discourse,
+    timeline,
   }
 }
 

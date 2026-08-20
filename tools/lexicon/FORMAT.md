@@ -1,4 +1,4 @@
-# mbook `.dict` format (v6)
+# mbook `.dict` format (v7)
 
 One `.dict` file holds one language's compiled lexicon **and** its hand-authored
 syntax data. It is optimised for exact-surface-form lookup at low memory: a
@@ -52,7 +52,7 @@ mirror of this document. `tools/lexicon/format/encode.ts` is the writer.
 | field         | type      | value / meaning                          |
 |---------------|-----------|------------------------------------------|
 | magic         | u8[4]     | `4D 42 4C 58` = ASCII `"MBLX"`           |
-| version       | u32       | `6`                                      |
+| version       | u32       | `7`                                      |
 | langLen       | u8        | byte length of `lang`                    |
 | lang          | u8[langLen] | UTF-8 language tag (`"pt-BR"`, `"en"`)  |
 | variantScheme | u8        | `VariantScheme`                          |
@@ -188,6 +188,12 @@ object (not a packed table). Schema (`SyntaxData` in `format/model.ts`):
   "lightVerbs": [               // verb+noun pairs denoting one event
     { "verb": "take", "noun": "walk", "lemma": "walk" } ],
   "locativeMarkers": ["in"],    // adpositions governing places (entity typing)
+  "placeHeadNouns": ["city"],   // heads whose genitive names a place ("a cidade de S")
+  "timeConnectives": [          // discourse time adverbs for the timeline pass
+    { "form": "then", "role": "advance"|"retreat" } ],
+  "subordinatorTime": [         // temporal subordinators' clause-order assertions
+    { "form": "when", "edge": "sub-meets-matrix"|"matrix-during-sub"
+                            |"sub-before-matrix"|"matrix-meets-sub"|"none" } ],
   "verbFeats": {                // morphology-code prefixes, in this dict's feat vocabulary
     "finitePrefixes":     ["..."],
     "infinitivePrefixes": ["..."],
@@ -207,7 +213,7 @@ A reader may verify the trailer as an integrity/truncation check.
 
 ## Lookup algorithm (reference)
 
-1. Verify header magic and `version == 6`; read metadata.
+1. Verify header magic and `version == 7`; read metadata.
 2. Load the offset tables (sections 3–4) and keep `entriesBase` and the two
    pools addressable.
 3. `lookup(form)`: UTF-8-encode `form`; binary-search `formOffsets`/`formBlob`
@@ -235,7 +241,8 @@ inversion); v5 added the argument-structure and discourse lists
 three clitic classes, `subordinators`, article definiteness, `temporalNouns`,
 `particles`, the comparative pair) and `verbFeats.gerundPrefixes`; v6 added
 `perfectAuxiliaries`, `lightVerbs`, `locativeMarkers` and
-`verbFeats.tenseSenses`. The binary
+`verbFeats.tenseSenses`; v7 added the timeline lexicon (`timeConnectives`,
+`subordinatorTime`) and `placeHeadNouns`. The binary
 layout is unchanged since v1, but the schema is
 part of the reader contract — an engine handed an older dict would read
 `undefined` where it expects those lists — so the version gates it.

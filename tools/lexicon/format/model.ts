@@ -98,6 +98,16 @@ export type LightVerbHint = {
   lemma: string
 }
 
+export type TimeConnective = {
+  form: string
+  role: "advance" | "retreat"
+}
+
+export type SubordinatorTime = {
+  form: string
+  edge: "sub-before-matrix" | "sub-meets-matrix" | "matrix-during-sub" | "matrix-meets-sub" | "none"
+}
+
 export type AnaphorHint = {
   form: string
   feat: string
@@ -134,6 +144,9 @@ export type SyntaxData = {
   perfectAuxiliaries: string[]
   lightVerbs: LightVerbHint[]
   locativeMarkers: string[]
+  placeHeadNouns: string[]
+  timeConnectives: TimeConnective[]
+  subordinatorTime: SubordinatorTime[]
   verbFeats: VerbFeatMarks
 }
 

@@ -259,7 +259,7 @@ describe("the narrator's continuity: one {Eu} glyph carries forward", () => {
   })
 })
 
-describe("entity typing: places by the grammar that governs them", () => {
+describe("entity typing: ordered evidence, strongest rule wins", () => {
   it("a locative adposition types the name it introduces; the rest stay unknown", () => {
     const book = [
       "---",
@@ -279,6 +279,55 @@ describe("entity typing: places by the grammar that governs them", () => {
 
     // Cast members are the cast's business, never entities.
     expect(byName.has("Rei")).toBe(false)
+  })
+
+  it("speaking outranks geography, typed heads claim by grammar, quotes claim nothing", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "A cidade de S era fria. Corra, disse Hellmanns. Li “Um estudo em Vermelho” no B Bar.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+    const byName = new Map(analysis.entities.map((e) => [e.name, e]))
+
+    expect(byName.get("S")).toMatchObject({ kind: "place" })
+    expect(byName.get("Hellmanns")).toMatchObject({ kind: "person" })
+    expect(byName.get("Vermelho")).toMatchObject({ kind: "unknown" })
+    expect(byName.get("B Bar")).toMatchObject({ kind: "place" })
+  })
+})
+
+describe("the timeline crosses paragraph breaks", () => {
+  it("the last perfective of one paragraph precedes the first of the next", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "Rei chegou ao bar. Sentou na cadeira.",
+      "",
+      "Abriu o caderno. Escreveu a primeira linha.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.timelineEdges.length).toBe(1)
+    expect(analysis.timelineEdges[0]!).toMatchObject({
+      kind: "before",
+      fromParagraph: 0,
+      toParagraph: 1,
+      provenance: "narrative-advance",
+    })
+
+    const from = analysis.paragraphs[0]!.analysis.sentences[analysis.timelineEdges[0]!.fromSentence]!
+    const token = from.tokens[analysis.timelineEdges[0]!.fromToken]!
+
+    expect(token.role === "content" && token.tagged.token.text).toBe("Sentou")
   })
 })
 

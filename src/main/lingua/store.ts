@@ -115,6 +115,28 @@ CREATE TABLE discourse_links (
   kind TEXT NOT NULL,
   provenance TEXT NOT NULL
 );
+CREATE TABLE timeline_events (
+  sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+  token_idx INTEGER NOT NULL,
+  lane TEXT NOT NULL,
+  sense TEXT NOT NULL,
+  effect TEXT NOT NULL
+);
+CREATE TABLE timeline_edges (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  from_sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+  from_token_idx INTEGER NOT NULL,
+  to_sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+  to_token_idx INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  provenance TEXT NOT NULL
+);
+CREATE TABLE entities (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  mentions INTEGER NOT NULL
+);
 `
 
 type Db = InstanceType<typeof Database>
@@ -134,7 +156,7 @@ export function openLinguaStore(path: string): Result<LinguaStore, StoreError> {
   }
 }
 
-const VERSION = 4
+const VERSION = 5
 
 function migrate(db: Db): void {
   const version = currentVersion(db)
@@ -147,6 +169,9 @@ function migrate(db: Db): void {
   }
 
   db.exec(`
+DROP TABLE IF EXISTS entities;
+DROP TABLE IF EXISTS timeline_edges;
+DROP TABLE IF EXISTS timeline_events;
 DROP TABLE IF EXISTS discourse_links;
 DROP TABLE IF EXISTS spans;
 DROP TABLE IF EXISTS relations;
@@ -194,6 +219,15 @@ function store(db: Db): LinguaStore {
   const insertDiscourseLink = db.prepare(
     "INSERT INTO discourse_links (book_id, from_sentence_id, from_token_idx, to_sentence_id, to_token_idx, kind, provenance) VALUES (?, ?, ?, ?, ?, ?, ?)",
   )
+  const insertTimelineEvent = db.prepare(
+    "INSERT INTO timeline_events (sentence_id, token_idx, lane, sense, effect) VALUES (?, ?, ?, ?, ?)",
+  )
+  const insertTimelineEdge = db.prepare(
+    "INSERT INTO timeline_edges (book_id, from_sentence_id, from_token_idx, to_sentence_id, to_token_idx, kind, provenance) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  )
+  const insertEntity = db.prepare(
+    "INSERT INTO entities (book_id, name, kind, mentions) VALUES (?, ?, ?, ?)",
+  )
 
   const writeAll = db.transaction((record: BookRecord, rows: AnalysisRows) => {
     deleteBook.run(record.path)
@@ -218,6 +252,32 @@ function store(db: Db): LinguaStore {
 
     for (const link of rows.discourseLinks) {
       writeDiscourseLink(link, bookId, sentenceIds)
+    }
+
+    for (const event of rows.timelineEvents) {
+      insertTimelineEvent.run(
+        sentenceIdOf(sentenceIds, event.paragraphIdx, event.sentenceIdx),
+        event.tokenIdx,
+        event.lane,
+        event.sense,
+        event.effect,
+      )
+    }
+
+    for (const e of rows.timelineEdges) {
+      insertTimelineEdge.run(
+        bookId,
+        sentenceIdOf(sentenceIds, e.fromParagraphIdx, e.fromSentenceIdx),
+        e.fromTokenIdx,
+        sentenceIdOf(sentenceIds, e.toParagraphIdx, e.toSentenceIdx),
+        e.toTokenIdx,
+        e.kind,
+        e.provenance,
+      )
+    }
+
+    for (const entity of rows.entities) {
+      insertEntity.run(bookId, entity.name, entity.kind, entity.mentions)
     }
   })
 

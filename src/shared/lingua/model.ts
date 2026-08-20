@@ -110,6 +110,24 @@ export type LightVerbHint = {
   lemma: string
 }
 
+// A discourse-level time adverb: sentence-initial `depois`/`then` confirms
+// narrative advancement, `antes`/`earlier` retreats — the sentence's first
+// perfective event lands BEFORE the current reference time instead of after.
+export type TimeConnective = {
+  form: string
+  role: "advance" | "retreat"
+}
+
+// What a temporal subordinator says about its clause's event (sub) relative
+// to the matrix event: `quando` makes sub meet the matrix, `enquanto` wraps
+// the matrix inside sub, `porque` puts the cause before its effect, `until`
+// ends the matrix at sub. "none" declares the subordinator atemporal
+// (concessive `embora`, conditional `se`).
+export type SubordinatorTime = {
+  form: string
+  edge: "sub-before-matrix" | "sub-meets-matrix" | "matrix-during-sub" | "matrix-meets-sub" | "none"
+}
+
 // A third-person pronoun that refers back: its surface form and the agreement
 // feat ([mf][sp]) an antecedent must carry. An empty feat matches anything —
 // the honest declaration for a language whose nouns carry no gender.
@@ -180,6 +198,13 @@ export type SyntaxData = {
   // Adpositions that govern PLACES (em/no/para, in/at/to): a proper noun they
   // introduce types as a place in the entity pass.
   locativeMarkers: string[]
+  // Common nouns whose genitive/appositive names a PLACE by grammar alone:
+  // `a cidade de S`, `the town of X` — the strongest place evidence.
+  placeHeadNouns: string[]
+  // The timeline lexicon: discourse time adverbs and what each temporal
+  // subordinator asserts about clause order.
+  timeConnectives: TimeConnective[]
+  subordinatorTime: SubordinatorTime[]
   verbFeats: VerbFeatMarks
 }
 
