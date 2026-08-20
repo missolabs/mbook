@@ -104,7 +104,11 @@ export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
 
   // Statement segmentation: the paragraph's sentences are its compilation
   // statements; each runs the middle passes independently.
-  const raw = segment(tokens, input.lexicon.syntax.closedClass.abbreviations)
+  const raw = segment(
+    tokens,
+    input.lexicon.syntax.closedClass.abbreviations,
+    input.lexicon.syntax.closedClass.prepositions,
+  )
 
   const sentences = raw.map((sentence) => analyzeSentence(sentence.tokens, input))
 

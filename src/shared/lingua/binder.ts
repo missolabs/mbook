@@ -214,8 +214,10 @@ function terminalBetween(tokens: readonly AnalyzedToken[], from: number, to: num
   return false
 }
 
-// The gap between this VP and the chunk before it is exactly one conjunction
-// token — the `e` / `and` that coordinates it into the previous clause.
+// The gap between this VP and the chunk before it is one conjunction token,
+// optionally trailed by adverbs — `e saiu`, but also `e sempre escrevia`,
+// `e já não pensava`: the adverbs ride the conjoined verb and must not break
+// the subject inheritance.
 function conjJoinsPreviousClause(input: RelationInput, ci: number): boolean {
   switch (ci === 0) {
     case true:
@@ -228,20 +230,38 @@ function conjJoinsPreviousClause(input: RelationInput, ci: number): boolean {
   const from = previous.to
   const to = input.chunks[ci]!.from
 
-  switch (to - from === 1) {
+  switch (to - from >= 1) {
     case false:
       return false
     case true:
       break
   }
 
-  const between = input.tokens[from]!
-
-  switch (between.role) {
-    case "punctuation":
+  switch (contentPos(input.tokens[from]!) === "CONJ") {
+    case false:
       return false
+    case true:
+      break
+  }
+
+  for (let at = from + 1; at < to; at++) {
+    switch (contentPos(input.tokens[at]!) === "ADV") {
+      case true:
+        continue
+      case false:
+        return false
+    }
+  }
+
+  return true
+}
+
+function contentPos(token: AnalyzedToken): string {
+  switch (token.role) {
+    case "punctuation":
+      return ""
     case "content":
-      return between.tagged.pos === "CONJ"
+      return token.tagged.pos
   }
 }
 
@@ -544,15 +564,6 @@ function addRelativeObject(relations: Relation[], input: RelationInput, ci: numb
       break
   }
 
-  const antecedent = antecedentBefore(input, rel.value)
-
-  switch (antecedent.kind) {
-    case "none":
-      return
-    case "some":
-      break
-  }
-
   const subjectBetween = input.chunks.some(
     (c) => c.kind === "NP" && c.from > rel.value && c.to <= vp.from,
   )
@@ -561,7 +572,47 @@ function addRelativeObject(relations: Relation[], input: RelationInput, ci: numb
     case false:
       return
     case true:
-      relations.push(relation("object-of", antecedent.value, vp.head, "heuristic"))
+      break
+  }
+
+  const antecedent = antecedentBefore(input, rel.value)
+
+  switch (antecedent.kind) {
+    case "none":
+      break
+    case "some": {
+      // A matrix verb that already took a DIFFERENT object disowns this `que`:
+      // in `ver nos olhos de Rei que ele ligava`, ver's object is olhos, so
+      // the que-clause is ver's complement and Rei is no antecedent. When the
+      // matrix's object IS the antecedent (`guardou o caderno que...`) the
+      // relative reading stands.
+      const disowned = relations.some(
+        (r) =>
+          r.kind === "object-of" &&
+          r.head < rel.value &&
+          r.dependent !== antecedent.value,
+      )
+
+      switch (disowned) {
+        case true:
+          return
+        case false:
+          relations.push(relation("object-of", antecedent.value, vp.head, "heuristic"))
+          return
+      }
+    }
+  }
+
+  // No nominal antecedent — but a determiner right before the pronoun is the
+  // FREE relative (`o que eu tinha feito`): the pronoun itself is the verb's
+  // object, and the claim keeps the discourse pass from inventing an elision.
+  const before = rel.value - 1
+
+  switch (before >= 0 && contentPos(input.tokens[before]!) === "DET") {
+    case true:
+      relations.push(relation("object-of", rel.value, vp.head, "heuristic"))
+      return
+    case false:
       return
   }
 }
@@ -922,19 +973,50 @@ function firstChunkFrom(chunks: readonly Chunk[], start: number): Optional<numbe
   return { kind: "none" }
 }
 
+// Quote marks are TRANSPARENT here: `li "Um estudo em Vermelho"` hands the
+// verb its quoted object — the quotes typeset the title, they don't close the
+// clause. Every other mark still bounds it.
 function punctuationBetween(tokens: readonly AnalyzedToken[], from: number, to: number): boolean {
   for (let at = from; at < to; at++) {
     const token = tokens[at]!
 
     switch (token.role) {
       case "punctuation":
-        return true
+        break
       case "content":
         continue
+    }
+
+    switch (isQuoteMark(token.token.text)) {
+      case true:
+        continue
+      case false:
+        return true
     }
   }
 
   return false
+}
+
+function isQuoteMark(text: string): boolean {
+  switch (text) {
+    case "“":
+      return true
+    case "”":
+      return true
+    case "\"":
+      return true
+    case "‘":
+      return true
+    case "’":
+      return true
+    case "«":
+      return true
+    case "»":
+      return true
+    default:
+      return false
+  }
 }
 
 function previousVp(chunks: readonly Chunk[], ci: number): Optional<number> {

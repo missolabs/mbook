@@ -22,8 +22,10 @@ export type RawSentence = { tokens: readonly SourceToken[] }
 export function segment(
   tokens: readonly SourceToken[],
   abbreviations: readonly string[],
+  prepositions: readonly string[],
 ): readonly RawSentence[] {
   const abbr = new Set(abbreviations)
+  const preps = new Set(prepositions)
 
   const sentences: RawSentence[] = []
   let buffer: SourceToken[] = []
@@ -35,7 +37,7 @@ export function segment(
     buffer.push(token)
     i++
 
-    switch (isTerminal(token) && !closesAbbreviation(token, buffer, abbr)) {
+    switch (isTerminal(token) && !closesAbbreviation(token, buffer, abbr, preps)) {
       case false:
         continue
       case true:
@@ -181,7 +183,12 @@ function isDash(token: SourceToken): boolean {
   }
 }
 
-function closesAbbreviation(token: SourceToken, buffer: SourceToken[], abbr: Set<string>): boolean {
+function closesAbbreviation(
+  token: SourceToken,
+  buffer: SourceToken[],
+  abbr: Set<string>,
+  preps: Set<string>,
+): boolean {
   switch (token.text === ".") {
     case false:
       return false
@@ -202,18 +209,28 @@ function closesAbbreviation(token: SourceToken, buffer: SourceToken[], abbr: Set
     case false:
       return false
     case true:
-      return abbr.has(prev!.text) || isInitial(prev!.text)
+      return abbr.has(prev!.text) || isInitial(prev!.text, buffer, preps)
   }
 }
 
-// A bare capital letter before a dot is a name initial (`F. Scott`, `J. R.`),
-// not a sentence end.
-function isInitial(text: string): boolean {
-  switch (text.length === 1) {
+// A bare capital letter before a dot is a name initial (`F. Scott`, `J. R.`) —
+// UNLESS a preposition governs it (`mudei para S.`, `antes de S.`), the
+// Kafkaesque place-initial style, where the dot really does end the sentence.
+function isInitial(text: string, buffer: SourceToken[], preps: Set<string>): boolean {
+  switch (text.length === 1 && text !== text.toLowerCase()) {
     case false:
       return false
     case true:
-      return text !== text.toLowerCase()
+      break
+  }
+
+  const before = buffer[buffer.length - 3]
+
+  switch (before === undefined) {
+    case true:
+      return true
+    case false:
+      return !(before!.kind === "word" && preps.has(before!.text.toLowerCase()))
   }
 }
 

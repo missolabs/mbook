@@ -22,7 +22,7 @@
 
 import type { Optional } from "../optional"
 import type { Lexicon, VariantScope } from "./lexicon"
-import type { ClosedClass, Entry, Pos, SuffixRule, SyntaxData, ValencyHint, VerbFeatMarks } from "./model"
+import type { ClosedClass, Entry, Pos, SuffixRule, SyntaxData, VerbFeatMarks } from "./model"
 import type { SourceToken } from "./lexer"
 
 export type Provenance =
@@ -51,7 +51,7 @@ export type TagInput = {
   syntax: SyntaxData
 }
 
-type PrevPos = { kind: "none" } | { kind: "pos"; pos: Pos }
+type PrevPos = { kind: "none" } | { kind: "pos"; pos: Pos; feat: string }
 
 type Closed = {
   det: Set<string>
@@ -67,24 +67,31 @@ export function tagSentence(input: TagInput): readonly AnalyzedToken[] {
   const out: AnalyzedToken[] = []
   let prev: PrevPos = { kind: "none" }
   let seenContent = false
+  let afterOpeningQuote = false
 
   for (const token of input.tokens) {
     switch (token.kind) {
       case "punctuation":
         out.push({ role: "punctuation", token })
+        // A quoted title opens like a sentence opens: `li "Um estudo..."`
+        // must casefold `Um` back to the article, exactly as at a sentence
+        // start.
+        afterOpeningQuote = isOpeningQuote(token.text)
         break
       case "number": {
         const tagged: TaggedToken = { token, lemma: token.text, pos: "NUM", feat: "", provenance: "shape-guess" }
         out.push({ role: "content", tagged })
-        prev = { kind: "pos", pos: "NUM" }
+        prev = { kind: "pos", pos: "NUM", feat: "" }
         seenContent = true
+        afterOpeningQuote = false
         break
       }
       case "word": {
-        const tagged = tagWord(token, seenContent === false, prev, input, closed)
+        const tagged = tagWord(token, seenContent === false || afterOpeningQuote, prev, input, closed)
         out.push({ role: "content", tagged })
-        prev = { kind: "pos", pos: tagged.pos }
+        prev = { kind: "pos", pos: tagged.pos, feat: tagged.feat }
         seenContent = true
+        afterOpeningQuote = false
         break
       }
     }
@@ -130,6 +137,21 @@ function retagPossessives(out: AnalyzedToken[]): void {
         provenance: "closed-class",
       },
     }
+  }
+}
+
+function isOpeningQuote(text: string): boolean {
+  switch (text) {
+    case "“":
+      return true
+    case "«":
+      return true
+    case "\"":
+      return true
+    case "‘":
+      return true
+    default:
+      return false
   }
 }
 
@@ -325,6 +347,15 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
       break
   }
 
+  const agreeing = agreementPick(candidates, prev, syntax)
+
+  switch (agreeing.kind) {
+    case "some":
+      return agreeing.value
+    case "none":
+      break
+  }
+
   for (const rule of CONTEXT_RULES) {
     switch (rule.prev === prev.pos) {
       case false:
@@ -345,11 +376,66 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
       case true:
         continue
       case false:
-        return lemmaPick(matches, syntax.valency)
+        return lemmaPick(matches, syntax)
     }
   }
 
   return priorityPick(candidates, syntax)
+}
+
+// The agreement gate, the rule that keeps `luz baixa`, `certa estima` and
+// `poço seco` nominal: after a gender/number-marked NOUN or ADJ, a nominal
+// candidate AGREEING with it (identical fs/ms/fp/mp feat) beats a junk-rare
+// finite-verb homograph (baixar, estimar, secar) — unless some finite verb
+// candidate is valency-curated (ser: `a beleza era` must stay verbal). The
+// gate is data-inert in English: its feats never match the agreement shape.
+const AGREEMENT = /^[mf][sp]$/
+
+function agreementPick(
+  candidates: readonly Entry[],
+  prev: { pos: Pos; feat: string },
+  syntax: SyntaxData,
+): Optional<Entry> {
+  const host = prev.pos === "NOUN" || prev.pos === "ADJ"
+
+  switch (host && AGREEMENT.test(prev.feat)) {
+    case false:
+      return { kind: "none" }
+    case true:
+      break
+  }
+
+  const hintedVerb = candidates.some(
+    (e) =>
+      e.pos === "VERB" &&
+      hasPrefix(e.feat, syntax.verbFeats.finitePrefixes) &&
+      syntax.valency.some((v) => v.lemma === e.lemma),
+  )
+
+  switch (hintedVerb) {
+    case true:
+      return { kind: "none" }
+    case false:
+      break
+  }
+
+  const adjective = candidates.find((e) => e.pos === "ADJ" && e.feat === prev.feat)
+
+  switch (adjective === undefined) {
+    case false:
+      return { kind: "some", value: adjective! }
+    case true:
+      break
+  }
+
+  const noun = candidates.find((e) => e.pos === "NOUN" && e.feat === prev.feat)
+
+  switch (noun === undefined) {
+    case false:
+      return { kind: "some", value: noun! }
+    case true:
+      return { kind: "none" }
+  }
 }
 
 function formMatches(form: FormClass, feat: string, marks: VerbFeatMarks): boolean {
@@ -391,11 +477,26 @@ function personMatches(person: Person, feat: string): boolean {
   }
 }
 
-// Among equally-preferred candidates, one whose lemma carries a valency hint is
-// a word the syntax data marks as central (`era` resolves to ser, not the rare
-// erar), so it wins; otherwise the first candidate stands.
-function lemmaPick(matches: readonly Entry[], valency: readonly ValencyHint[]): Entry {
-  const known = matches.find((e) => valency.some((v) => v.lemma === e.lemma))
+// Among equally-preferred candidates, one whose lemma carries a valency hint
+// is a word the syntax data marks as central (`era` resolves to ser, not the
+// rare erar), so it wins. When SEVERAL hinted lemmas share the form — foi is
+// both ser and ir — the GRAMMATICALIZED copula takes it: `Foi um tempo`
+// predicates, `a cidade foi tomada` passivizes, and dataflow's impersonal
+// excusal sees the copula it expects. The preference is gated on the
+// passive-auxiliary list, NOT the copular frame alone — virar is copular but
+// `viram` must stay ver, not turn.
+function lemmaPick(matches: readonly Entry[], syntax: SyntaxData): Entry {
+  const auxCopula = matches.find((e) => syntax.passiveAuxiliaries.includes(e.lemma) &&
+    syntax.valency.some((v) => v.lemma === e.lemma && v.frame === "copular"))
+
+  switch (auxCopula === undefined) {
+    case false:
+      return auxCopula!
+    case true:
+      break
+  }
+
+  const known = matches.find((e) => syntax.valency.some((v) => v.lemma === e.lemma))
 
   switch (known === undefined) {
     case true:
@@ -437,7 +538,7 @@ function priorityPick(candidates: readonly Entry[], syntax: SyntaxData): Entry {
 
   switch (hinted.length > 0) {
     case true:
-      return lemmaPick(hinted, syntax.valency)
+      return lemmaPick(hinted, syntax)
     case false:
       break
   }

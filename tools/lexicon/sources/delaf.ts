@@ -141,12 +141,34 @@ function parseLine(line: string): LexEntry[] {
 
   switch (codesRaw.length === 0) {
     case true:
-      return [{ form, lemma, pos, feat: "", variant: "both" }]
+      return withModernTwins([{ form, lemma, pos, feat: "", variant: "both" }])
     case false: {
       const codes = codesRaw.split(":").filter((c) => c.length > 0)
-      return codes.map((feat) => ({ form, lemma, pos, feat, variant: "both" }))
+      return withModernTwins(codes.map((feat) => ({ form, lemma, pos, feat, variant: "both" })))
     }
   }
+}
+
+// Each pre-reform entry also ships under its 1990-agreement spelling — the
+// dictionary predates parts of the reform (idéia, vôo, lingüiça), and a book
+// written today misses them all. Both spellings resolve.
+function withModernTwins(entries: LexEntry[]): LexEntry[] {
+  const out: LexEntry[] = []
+
+  for (const e of entries) {
+    out.push(e)
+
+    const modern = modernize(e.form)
+
+    switch (modern === e.form) {
+      case true:
+        break
+      case false:
+        out.push({ form: modern, lemma: modernize(e.lemma), pos: e.pos, feat: e.feat, variant: e.variant })
+    }
+  }
+
+  return out
 }
 
 export function parseDelaf(text: string): LexEntry[] {
@@ -161,6 +183,25 @@ export function parseDelaf(text: string): LexEntry[] {
   }
 
   return out
+}
+
+// DELAF 2015 predates parts of the 1990 orthographic agreement: the noun is
+// spelled idéia, the flight vôo, the sausage lingüiça — and a book written
+// today misses them all. Each pre-reform form ALSO ships under its modern
+// spelling (the old form stays, so either orthography resolves):
+//   * the trema is abolished outright (ü -> u);
+//   * the circumflex drops from ôo / êe (vôo -> voo, lêem -> leem);
+//   * the acute drops from the open diphthongs éi / ói in paroxytones —
+//     approximated as "followed by a vowel" (idéia -> ideia, jibóia ->
+//     jiboia), which correctly leaves oxytones alone (herói, dói, heróis).
+function modernize(s: string): string {
+  return s
+    .replace(/ü/g, "u")
+    .replace(/Ü/g, "U")
+    .replace(/ôo/g, "oo")
+    .replace(/êe/g, "ee")
+    .replace(/éi(?=[aeiou])/g, "ei")
+    .replace(/ói(?=[aeiou])/g, "oi")
 }
 
 // exported for the round-trip test's tiny fixture

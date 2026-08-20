@@ -30,7 +30,7 @@ import type { AnchoredSpan, Sentence } from "./pipeline"
 import type { SyntaxData, ValencyFrame, ValencyHint } from "./model"
 import type { Relation } from "./binder"
 
-export type DiscourseLinkKind = "elided-object"
+export type DiscourseLinkKind = "elided-object" | "elided-subject"
 
 export type DiscourseProvenance = "discourse"
 
@@ -53,6 +53,31 @@ export function linkDiscourse(input: DiscourseInput): readonly DiscourseLink[] {
   const links: DiscourseLink[] = []
 
   input.sentences.forEach((sentence, si) => {
+    // Continuity claims one verb at a time: a sentence where SEVERAL verbs
+    // lack subjects is an impersonal or infinitival construction (`sair do
+    // trabalho significava entrar...`), not an elided subject.
+    const continuity = subjectlessThirdVerbs(sentence, input.syntax)
+    const eligible = continuity.length === 1 && subjectlessVpCount(sentence) === 1
+
+    for (const verb of eligible ? continuity : []) {
+      const antecedent = resolveSubjectAntecedent(input, si)
+
+      switch (antecedent.kind) {
+        case "none":
+          continue
+        case "some":
+          links.push({
+            kind: "elided-subject",
+            fromSentence: si,
+            fromToken: verb,
+            toSentence: antecedent.value.sentence,
+            toToken: antecedent.value.token,
+            provenance: "discourse",
+          })
+          continue
+      }
+    }
+
     for (const verb of objectlessTransitiveVerbs(sentence, input.syntax)) {
       const antecedent = resolveAntecedent(input, si, verb)
 
@@ -77,6 +102,149 @@ export function linkDiscourse(input: DiscourseInput): readonly DiscourseLink[] {
 }
 
 type Anchor = { sentence: number; token: number }
+
+// Pro-drop subject continuity: a finite, third-person-compatible verb with no
+// subject of its own continues the subject already on stage — "Rei chegou.
+// Sentou-se." keeps Rei sitting. Deliberately narrow:
+//   * narration only — dialogue turns change speakers, so speech is excluded;
+//   * the verb must be finite and its person marking must ADMIT third person
+//     (a 1st/2nd-marked form like `cheguei` is the narrator, who is not an NP
+//     and is not guessed at);
+//   * copular and presentational frames are excused — `Foram muitos anos`,
+//     `Havia gelo` are impersonal, not elliptical;
+//   * the antecedent is the nearest preceding sentence's last subject, the
+//     same recency rule the elided-object pass uses.
+function subjectlessThirdVerbs(sentence: Sentence, syntax: SyntaxData): readonly number[] {
+  switch (sentence.attribution.kind) {
+    case "narration":
+      break
+    case "speech":
+      return []
+    case "written":
+      return []
+  }
+
+  const out: number[] = []
+
+  for (const chunk of sentence.chunks) {
+    switch (chunk.kind) {
+      case "VP":
+        break
+      case "NP":
+        continue
+      case "PP":
+        continue
+    }
+
+    const feat = featAt(sentence, chunk.head)
+    const finite = syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p))
+    const thirdCompatible = feat.includes("3") || /[12]/.test(feat) === false
+
+    switch (finite && thirdCompatible) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    switch (impersonalFrame(lemmaAt(sentence, chunk.head), syntax.valency)) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    // Any argument of its own disqualifies the verb: `Faz muito tempo`
+    // carries its temporal pseudo-object and is impersonal, not elliptical.
+    // The conservative price — `Abriu a porta.` loses its continuity — is
+    // accepted and documented.
+    const engaged = sentence.relations.some(
+      (r) =>
+        (r.kind === "subject-of" || r.kind === "object-of" || r.kind === "complement-of") &&
+        r.head === chunk.head,
+    )
+
+    switch (engaged) {
+      case true:
+        continue
+      case false:
+        out.push(chunk.head)
+        continue
+    }
+  }
+
+  return out
+}
+
+function subjectlessVpCount(sentence: Sentence): number {
+  let count = 0
+
+  for (const chunk of sentence.chunks) {
+    switch (chunk.kind) {
+      case "VP":
+        break
+      case "NP":
+        continue
+      case "PP":
+        continue
+    }
+
+    const subjected = sentence.relations.some(
+      (r) => r.kind === "subject-of" && r.head === chunk.head,
+    )
+
+    switch (subjected) {
+      case true:
+        continue
+      case false:
+        count++
+        continue
+    }
+  }
+
+  return count
+}
+
+function impersonalFrame(lemma: string, valency: readonly ValencyHint[]): boolean {
+  const hit = valency.find((v) => v.lemma === lemma)
+
+  switch (hit === undefined) {
+    case true:
+      return false
+    case false:
+      break
+  }
+
+  switch (hit!.frame) {
+    case "copular":
+      return true
+    case "presentational":
+      return true
+    case "intransitive":
+      return false
+    case "transitive":
+      return false
+    case "ditransitive":
+      return false
+    case "prepositional":
+      return false
+  }
+}
+
+function resolveSubjectAntecedent(input: DiscourseInput, si: number): Optional<Anchor> {
+  for (let sj = si - 1; sj >= 0; sj--) {
+    const subject = lastDependent(input.sentences[sj]!, "subject-of")
+
+    switch (subject.kind) {
+      case "none":
+        continue
+      case "some":
+        return { kind: "some", value: { sentence: sj, token: subject.value } }
+    }
+  }
+
+  return { kind: "none" }
+}
 
 // VP heads whose lemma the valency data declares object-taking, yet no
 // object-of or complement-of relation was built for. Two periphrasis shapes

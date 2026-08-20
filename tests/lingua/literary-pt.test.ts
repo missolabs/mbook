@@ -318,6 +318,103 @@ describe("Murakami: which stairs, from where — genitive nesting and place rela
   })
 })
 
+describe("Dazai: the fixes the memoir demanded", () => {
+  it("strips centred-line and emphasis markup before lexing — marks are typesetting, not prose", () => {
+    const centred = analyze("-> Antes <-")
+
+    expect(centred.stripped).toBe("Antes")
+
+    const emphatic = analyze("A execução foi **pior** e *mais lenta*.")
+
+    expect(emphatic.stripped).toBe("A execução foi pior e mais lenta.")
+
+    const extract = analyze("> A perfeição é frágil.")
+
+    expect(extract.stripped).toBe("A perfeição é frágil.")
+  })
+
+  it("modern orthography resolves — ideia is a noun, not the rare verb idear", () => {
+    const sentence = only("A ideia sempre existiu.")
+
+    expect(tagged(sentence, "ideia").pos).toBe("NOUN")
+    expect(relation(sentence, "subject-of", "ideia", "existiu")).toBeDefined()
+  })
+
+  it("cuts the sentence after a preposition-governed place initial, but never inside a name", () => {
+    const place = analyze("Mudei para S. Eu não ligava.")
+
+    expect(place.sentences.length).toBe(2)
+
+    const name = analyze("O velho F. Tanabe chegou.")
+
+    expect(name.sentences.length).toBe(1)
+  })
+
+  it("hands a verb its quoted object — the quotes typeset the title, they don't close the clause", () => {
+    const sentence = only("Li “Um estudo em Vermelho” naquela noite.")
+
+    expect(relation(sentence, "object-of", "estudo", "Li")).toBeDefined()
+  })
+
+  it("carries the subject over a conjunction trailed by adverbs", () => {
+    const sentence = only("Eu puxava o meu caderno e sempre escrevia poesias.")
+
+    expect(dependentsOf(sentence, "subject-of", "escrevia")).toEqual(["Eu"])
+    expect(relation(sentence, "object-of", "poesias", "escrevia")).toBeDefined()
+  })
+
+  it("agreement keeps junk-rare verb homographs nominal — luz baixa, certa estima", () => {
+    const light = only("Eu li sob uma luz baixa amarela.")
+
+    expect(tagged(light, "baixa").pos).toBe("ADJ")
+    expect(tagged(light, "amarela").pos).toBe("ADJ")
+
+    const esteem = only("Eu tinha certa estima por ele.")
+
+    expect(tagged(esteem, "estima").pos).toBe("NOUN")
+    expect(relation(esteem, "object-of", "estima", "tinha")).toBeDefined()
+  })
+
+  it("a matrix verb with its own object disowns the que-clause — no relative object minted", () => {
+    const sentence = only("Ele conseguia ver nos olhos de Rei que ela ligava.")
+
+    expect(dependentsOf(sentence, "object-of", "ligava")).toEqual([])
+  })
+
+  it("the free relative is the object itself — o que eu fiz elides nothing", () => {
+    const sentence = only("Ele sabia o que eu tinha feito.")
+
+    expect(relation(sentence, "object-of", "que", "feito")).toBeDefined()
+  })
+
+  it("foi resolves to the copula among its homographs — Foi um tempo predicates", () => {
+    const sentence = only("Foi um tempo de silêncio.")
+
+    expect(tagged(sentence, "Foi").lemma).toBe("ser")
+    expect(relation(sentence, "predicate-of", "tempo", "Foi")).toBeDefined()
+  })
+
+  it("a subjectless third-person verb continues the subject on stage", () => {
+    const analysis = analyze("Rei chegou cansado. Sentou na cadeira.")
+
+    const subjects = analysis.discourse.filter((d) => d.kind === "elided-subject")
+
+    expect(subjects.length).toBe(1)
+    expect(subjects[0]!.fromSentence).toBe(1)
+    expect(subjects[0]!.toSentence).toBe(0)
+  })
+
+  it("never guesses a subject for the first person or the impersonal", () => {
+    const firstPerson = analyze("Rei chegou cansado. Cheguei logo depois.")
+
+    expect(firstPerson.discourse.filter((d) => d.kind === "elided-subject")).toEqual([])
+
+    const impersonal = analyze("Rei chegou cansado. Havia gelo na estrada.")
+
+    expect(impersonal.discourse.filter((d) => d.kind === "elided-subject")).toEqual([])
+  })
+})
+
 describe("Murakami: an elided object resolves through the perfect", () => {
   const analysis = analyze("O pão sumiu. Ela tinha comido.")
 

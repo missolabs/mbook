@@ -61,6 +61,10 @@ const VARCON_FIXTURE = ["# color", "A Cv DV: color / B C D: colour"].join("\n")
 
 const DELAF_FIXTURE = [
   "﻿casa,casa.N:fs",
+  "idéia,idéia.N:fs",
+  "vôo,vôo.N:ms",
+  "herói,herói.N:ms",
+  "lingüiça,lingüiça.N:fs",
   "casa,casar.V:P3s",
   "amada,amar.V:Kfs",
   "à,ao.PREPXDET+Art+Def:fs",
@@ -146,6 +150,16 @@ describe("pt-BR lexicon round-trip", () => {
 
   it("drops clitic verb+pronoun forms so they never ship", () => {
     expect(h.lookup("ama-a")).toEqual([])
+  })
+
+  it("ships each pre-reform spelling under its 1990-agreement twin too", () => {
+    expect(findEntry(h.lookup("ideia"), "NOUN", "fs").lemma).toBe("ideia")
+    expect(findEntry(h.lookup("idéia"), "NOUN", "fs").lemma).toBe("idéia")
+    expect(findEntry(h.lookup("voo"), "NOUN", "ms").lemma).toBe("voo")
+    expect(findEntry(h.lookup("linguiça"), "NOUN", "fs").lemma).toBe("linguiça")
+
+    // Oxytones keep their accent: no unaccented herói is ever minted.
+    expect(h.lookup("heroi")).toEqual([])
   })
 })
 

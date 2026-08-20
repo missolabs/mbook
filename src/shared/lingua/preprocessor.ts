@@ -21,6 +21,10 @@ export function preprocess(text: string, spans: readonly LineSpan[]): Preprocess
     blockRange(blocked, range, text.length)
   }
 
+  for (const range of markupRanges(text)) {
+    blockRange(blocked, range, text.length)
+  }
+
   let result = ""
   const map: number[] = []
 
@@ -47,6 +51,56 @@ export function reanchor(token: Token, map: readonly number[]): SourceToken {
     stripped: { from: token.from, to: token.to },
     source: { from: map[token.from]!, to: map[token.to - 1]! + 1 },
   }
+}
+
+// The book's own formatting marks are surface syntax too: the centred-line
+// arrows (`-> text <-`), the extract marker (`> `), and emphasis asterisks
+// carry typesetting, not prose — left in the stream they lex as junk
+// punctuation and poison the sentence. Hidden the same way sigils are, per
+// line of the paragraph.
+function markupRanges(text: string): readonly Range[] {
+  const ranges: Range[] = []
+  let lineStart = 0
+
+  for (const line of text.split("\n")) {
+    const centeredOpen = line.match(/^->\s?/)
+
+    switch (centeredOpen === null) {
+      case false:
+        ranges.push({ from: lineStart, to: lineStart + centeredOpen![0].length })
+        break
+      case true:
+        break
+    }
+
+    const centeredClose = line.match(/\s?<-$/)
+
+    switch (centeredClose === null) {
+      case false:
+        ranges.push({ from: lineStart + line.length - centeredClose![0].length, to: lineStart + line.length })
+        break
+      case true:
+        break
+    }
+
+    const extract = line.match(/^>\s?/)
+
+    switch (extract === null) {
+      case false:
+        ranges.push({ from: lineStart, to: lineStart + extract![0].length })
+        break
+      case true:
+        break
+    }
+
+    for (const emphasis of line.matchAll(/\*{1,2}/g)) {
+      ranges.push({ from: lineStart + emphasis.index!, to: lineStart + emphasis.index! + emphasis[0].length })
+    }
+
+    lineStart += line.length + 1
+  }
+
+  return ranges
 }
 
 function collectHidden(spans: readonly LineSpan[]): readonly Range[] {
