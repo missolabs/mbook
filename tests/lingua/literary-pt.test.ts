@@ -12,6 +12,7 @@ import { scanLine } from "../../src/shared/book/glyphs"
 import type { Cast } from "../../src/shared/book/cast"
 import { openLexicon } from "../../src/shared/lingua/lexicon"
 import type { Lexicon } from "../../src/shared/lingua/lexicon"
+import { verbTense } from "../../src/shared/lingua/model"
 import { analyzeParagraph } from "../../src/shared/lingua/pipeline"
 import type { ParagraphAnalysis, Sentence } from "../../src/shared/lingua/pipeline"
 import type { Relation, RelationKind } from "../../src/shared/lingua/binder"
@@ -840,5 +841,64 @@ describe("discourse: pronouns find their people, articles their entities", () =>
 
   it("a definite NP with no introduction claims nothing", () => {
     expect(link("O poço estava seco.", "coreference")).toEqual([])
+  })
+
+  it("the dictionary's diminutive lemma carries coreference — o gatinho IS o gato", () => {
+    const text = "Havia um gato no quintal. O gatinho dormia."
+    const links = link(text, "coreference")
+
+    expect(links.length).toBe(1)
+    expect(word(text, links[0]!.fromSentence, links[0]!.fromToken)).toBe("gatinho")
+    expect(word(text, links[0]!.toSentence, links[0]!.toToken)).toBe("gato")
+  })
+
+  it("the article-shaped clitic is an object and an anaphor — never the plain article", () => {
+    const text = "Mizoguchi chegou cedo. Eu o vi no mercado."
+    const analysis = analyze(text)
+    const second = analysis.sentences[1]!
+
+    expect(relation(second, "object-of", "o", "vi")).toBeDefined()
+
+    const links = analysis.discourse.filter((d) => d.kind === "anaphora")
+
+    expect(links.length).toBe(1)
+    expect(word(text, links[0]!.toSentence, links[0]!.toToken)).toBe("Mizoguchi")
+
+    // The plain article inside an NP claims nothing.
+    const article = analyze("O vento uivava na praia.")
+
+    expect(article.sentences[0]!.relations.filter((r) => r.kind === "object-of")).toEqual([])
+    expect(article.discourse.filter((d) => d.kind === "anaphora")).toEqual([])
+  })
+})
+
+describe("light verbs, tense senses and the name shape", () => {
+  it("marks the verb+noun pair as one event", () => {
+    const sentence = only("Deu um passeio no quintal.")
+
+    expect(relation(sentence, "object-of", "passeio", "Deu")).toBeDefined()
+    expect(relation(sentence, "light-verb-of", "passeio", "Deu")).toBeDefined()
+  })
+
+  it("an unlisted pair stays a plain object", () => {
+    const sentence = only("Deu a garrafa a Daniela.")
+
+    expect(sentence.relations.filter((r) => r.kind === "light-verb-of")).toEqual([])
+  })
+
+  it("classifies verb feats onto the timeline", () => {
+    const marks = PT.syntax.verbFeats
+
+    expect(verbTense("I3s", marks)).toEqual({ kind: "some", value: "imperfect" })
+    expect(verbTense("J1s", marks)).toEqual({ kind: "some", value: "past" })
+    expect(verbTense("Kfs", marks)).toEqual({ kind: "some", value: "participle" })
+    expect(verbTense("G", marks)).toEqual({ kind: "some", value: "gerund" })
+    expect(verbTense("zz", marks)).toEqual({ kind: "none" })
+  })
+
+  it("a capitalized unknown after a name is the name's continuation, not an -ar verb", () => {
+    const sentence = only("Fiquei no B Bar.")
+
+    expect(tagged(sentence, "Bar").pos).toBe("PROPN")
   })
 })

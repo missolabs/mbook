@@ -84,6 +84,18 @@ export type VerbFeatMarks = {
   participlePrefixes: string[]
   gerundPrefixes: string[]
   personDistinctPrefixes: string[]
+  tenseSenses: TenseSense[]
+}
+
+export type TenseSense = {
+  prefix: string
+  sense: string
+}
+
+export type LightVerbHint = {
+  verb: string
+  noun: string
+  lemma: string
 }
 
 export type AnaphorHint = {
@@ -119,6 +131,9 @@ export type SyntaxData = {
   particles: string[]
   degreeAdverbs: string[]
   thanMarkers: string[]
+  perfectAuxiliaries: string[]
+  lightVerbs: LightVerbHint[]
+  locativeMarkers: string[]
   verbFeats: VerbFeatMarks
 }
 

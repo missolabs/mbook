@@ -132,6 +132,10 @@ export const EN_SYNTAX: SyntaxData = {
     { lemma: "bring", frame: "ditransitive" },
     { lemma: "offer", frame: "ditransitive" },
     { lemma: "lend", frame: "ditransitive" },
+    // `have` earns its hint for the PERFECT: without it `had` resolves to
+    // Moby's junk had-lemma and the participle chain gate never sees the
+    // auxiliary ("She had walked" losing its periphrasis).
+    { lemma: "have", frame: "transitive" },
     { lemma: "make", frame: "transitive" },
     { lemma: "take", frame: "transitive" },
     { lemma: "see", frame: "transitive" },
@@ -205,10 +209,13 @@ export const EN_SYNTAX: SyntaxData = {
   // curation bias as Portuguese — verbs that take a person as OBJECT stay out
   // (`observed Mary` watches her at least as often as it quotes her, so
   // `observe` is absent despite its Victorian dialogue-tag pedigree).
+  // `observe` is safe here despite `observed Mary` also meaning watching her:
+  // English demands overt subjects, so a subjectless dicendi + name only
+  // occurs in attribution tails, and the clause-mate gate blocks plain SVO.
   dicendi: [
     "say", "ask", "reply", "answer", "whisper", "murmur", "mutter", "shout",
     "cry", "exclaim", "insist", "repeat", "argue", "add", "continue",
-    "conclude", "remark", "sigh", "groan", "wonder", "think",
+    "conclude", "remark", "sigh", "groan", "wonder", "think", "observe",
   ],
   dativeMarkers: ["to", "for"],
   negators: ["not", "never"],
@@ -242,6 +249,20 @@ export const EN_SYNTAX: SyntaxData = {
   particles: ["up", "down", "out", "off", "away", "back"],
   degreeAdverbs: ["more", "less", "as"],
   thanMarkers: ["than", "as"],
+  perfectAuxiliaries: ["have"],
+  lightVerbs: [
+    { verb: "take", noun: "walk", lemma: "walk" },
+    { verb: "take", noun: "look", lemma: "look" },
+    { verb: "take", noun: "breath", lemma: "breathe" },
+    { verb: "take", noun: "bath", lemma: "bathe" },
+    { verb: "have", noun: "look", lemma: "look" },
+    { verb: "have", noun: "drink", lemma: "drink" },
+    { verb: "make", noun: "decision", lemma: "decide" },
+    { verb: "make", noun: "promise", lemma: "promise" },
+    { verb: "give", noun: "sigh", lemma: "sigh" },
+    { verb: "give", noun: "laugh", lemma: "laugh" },
+  ],
+  locativeMarkers: ["in", "at", "into", "to", "from", "toward", "towards"],
   // AGID/Moby codes: PAST, 3SG and FIN are finite ("PAST" also prefixes
   // PASTPART — an accepted over-match, since a participle-only homograph with a
   // noun reading is vanishingly rare). The English infinitive is the bare base
@@ -255,5 +276,13 @@ export const EN_SYNTAX: SyntaxData = {
     // English feats never carry 1st/2nd person digits, so no tense needs
     // declaring; the person gates simply never fire here.
     personDistinctPrefixes: [],
+    // PASTPART before PAST — first declared prefix wins.
+    tenseSenses: [
+      { prefix: "PASTPART", sense: "participle" },
+      { prefix: "PAST", sense: "past" },
+      { prefix: "PROG", sense: "gerund" },
+      { prefix: "3SG", sense: "present" },
+      { prefix: "FIN", sense: "present" },
+    ],
   },
 }

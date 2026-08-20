@@ -33,8 +33,12 @@ edit).
 - The linguistic engine (`src/shared/lingua/`) is structured as a compiler:
   preprocessor (sigils out, source map kept) → lexer → segmenter (statement
   splitting) → tagger (classification against the compiled symbol table) →
-  parser (shallow phrase grammar shipped as data) → binder (roles: subject,
-  object, predicate, agent, located-in) → dataflow (cross-statement links).
+  parser (shallow phrase grammar shipped as data) → binder (16 relation
+  kinds — subject/object/dative/oblique/predicate/agent/located-in/
+  temporal/vocative/appositive/comparative/reflexive/adverbial/particle/
+  light-verb/complement — each with polarity) → dataflow (cross-statement
+  links: elisions, anaphora, coreference; the driver adds cross-paragraph
+  links and entity typing).
   `pipeline.ts` is the front end, `driver.ts` the per-book compilation driver
   (paragraphs are translation units, chapter/line/col the debug info), and
   the main process is the backend: `lower.ts` flattens IR to rows,

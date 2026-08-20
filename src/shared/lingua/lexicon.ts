@@ -267,7 +267,7 @@ function readTables(c: Cursor): Result<Tables, LexiconError> {
       break
   }
 
-  switch (version.value === 5) {
+  switch (version.value === 6) {
     case false:
       return err({ kind: "bad-version", found: version.value })
     case true:

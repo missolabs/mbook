@@ -55,7 +55,11 @@ export type TagInput = {
 // typesetting and stay transparent) between that content token and the
 // current one: bigram rules that model SUBJECT-VERB adjacency must not fire
 // across it (`por S, coisa` — S is not coisa's clause-mate subject).
-type PrevPos = { kind: "none" } | { kind: "pos"; pos: Pos; feat: string; boundary: boolean }
+// `lemma` lets the periphrasis rules check WHO the previous verb is: a
+// participle/gerund only chains onto an auxiliary (foi comido, tinha visto,
+// was running), never onto a plain lexical verb (`vanished wept` is two
+// finite clauses, not a perfect).
+type PrevPos = { kind: "none" } | { kind: "pos"; pos: Pos; feat: string; boundary: boolean; lemma: string }
 
 type Closed = {
   det: Set<string>
@@ -89,7 +93,7 @@ export function tagSentence(input: TagInput): readonly AnalyzedToken[] {
               case true:
                 break
               case false:
-                prev = { kind: "pos", pos: prev.pos, feat: prev.feat, boundary: true }
+                prev = { kind: "pos", pos: prev.pos, feat: prev.feat, boundary: true, lemma: prev.lemma }
                 break
             }
             break
@@ -98,7 +102,7 @@ export function tagSentence(input: TagInput): readonly AnalyzedToken[] {
       case "number": {
         const tagged: TaggedToken = { token, lemma: token.text, pos: "NUM", feat: "", provenance: "shape-guess" }
         out.push({ role: "content", tagged })
-        prev = { kind: "pos", pos: "NUM", feat: "", boundary: false }
+        prev = { kind: "pos", pos: "NUM", feat: "", boundary: false, lemma: token.text }
         seenContent = true
         afterOpeningQuote = false
         break
@@ -106,7 +110,7 @@ export function tagSentence(input: TagInput): readonly AnalyzedToken[] {
       case "word": {
         const tagged = tagWord(token, seenContent === false || afterOpeningQuote, prev, input, closed)
         out.push({ role: "content", tagged })
-        prev = { kind: "pos", pos: tagged.pos, feat: tagged.feat, boundary: false }
+        prev = { kind: "pos", pos: tagged.pos, feat: tagged.feat, boundary: false, lemma: tagged.lemma }
         seenContent = true
         afterOpeningQuote = false
         break
@@ -303,17 +307,28 @@ function unknownTag(
 ): TaggedToken {
   const suffix = suffixGuess(lower, rules)
 
+  // The capital letter outranks the suffix table — a mid-sentence
+  // capitalized unknown is a NAME even when its tail looks derivational
+  // (`B Bar` must not read Bar as an -ar verb) — EXCEPT when the suffix
+  // says adjective: names legitimately embed capitalized adjectives
+  // (`Pavilhão Dourado`, `Mar Morto`), and the ADJ reading keeps the name's
+  // head on its noun.
+  const nameish =
+    initial === false &&
+    isCapitalized(token.text) &&
+    (suffix.kind === "none" || suffix.value !== "ADJ")
+
+  switch (nameish) {
+    case true:
+      return { token, lemma: token.text, pos: "PROPN", feat: "", provenance: "shape-guess" }
+    case false:
+      break
+  }
+
   switch (suffix.kind) {
     case "some":
       return { token, lemma: lower, pos: suffix.value, feat: "", provenance: "suffix-guess" }
     case "none":
-      break
-  }
-
-  switch (initial === false && isCapitalized(token.text)) {
-    case true:
-      return { token, lemma: token.text, pos: "PROPN", feat: "", provenance: "shape-guess" }
-    case false:
       return { token, lemma: lower, pos: "NOUN", feat: "", provenance: "default" }
   }
 }
@@ -425,6 +440,22 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
     }
 
     switch (rule.bond === "clause-mate" && prev.boundary) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    // A participle/gerund chains only onto an AUXILIARY: after a plain
+    // lexical verb (`vanished wept`) the periphrasis reading is junk and the
+    // word keeps its finite reading. AUX-tagged neighbours pass unexamined.
+    const periphrastic =
+      (rule.form === "participle" || rule.form === "gerund") &&
+      prev.pos === "VERB" &&
+      syntax.passiveAuxiliaries.includes(prev.lemma) === false &&
+      syntax.perfectAuxiliaries.includes(prev.lemma) === false
+
+    switch (periphrastic) {
       case true:
         continue
       case false:

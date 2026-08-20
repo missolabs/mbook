@@ -259,6 +259,29 @@ describe("the narrator's continuity: one {Eu} glyph carries forward", () => {
   })
 })
 
+describe("entity typing: places by the grammar that governs them", () => {
+  it("a locative adposition types the name it introduces; the rest stay unknown", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "Mudei para S. Fiquei no B Bar. Rei viu Hellmanns no mercado.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+    const byName = new Map(analysis.entities.map((e) => [e.name, e]))
+
+    expect(byName.get("S")).toMatchObject({ kind: "place" })
+    expect(byName.get("B Bar")).toMatchObject({ kind: "place" })
+    expect(byName.get("Hellmanns")).toMatchObject({ kind: "unknown" })
+
+    // Cast members are the cast's business, never entities.
+    expect(byName.has("Rei")).toBe(false)
+  })
+})
+
 describe("a missing dictionary is a typed no-op, never a throw", () => {
   it("returns lexicon-unavailable carrying the language it could not serve", () => {
     const result = analyzeBook("Casa é boa.", NONE)

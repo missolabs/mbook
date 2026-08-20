@@ -136,6 +136,22 @@ function linkAnaphors(links: DiscourseLink[], input: DiscourseInput, si: number)
     const lower = token.tagged.token.text.toLowerCase()
     const hint = input.syntax.anaphoricPronouns.find((a) => a.form === lower)
 
+    // An article-shaped anaphor (the o/a/os/as clitics) refers only when the
+    // binder actually bound it as a verb argument — a plain article inside an
+    // NP never fires.
+    const articleShaped = hint !== undefined && input.syntax.definiteArticles.includes(lower)
+
+    const bound = sentence.relations.some(
+      (r) => (r.kind === "object-of" || r.kind === "dative-of") && r.dependent === ti,
+    )
+
+    switch (articleShaped && bound === false) {
+      case true:
+        return
+      case false:
+        break
+    }
+
     switch (hint !== undefined) {
       case true: {
         const antecedent = resolveAgreeing(input, si, ti, hint!.feat)
@@ -1038,6 +1054,8 @@ function claimsObject(relation: Relation, head: number): boolean {
     case "temporal-of":
       return false
     case "adverbial-of":
+      return false
+    case "light-verb-of":
       return false
   }
 }

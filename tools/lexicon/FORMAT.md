@@ -1,4 +1,4 @@
-# mbook `.dict` format (v3)
+# mbook `.dict` format (v6)
 
 One `.dict` file holds one language's compiled lexicon **and** its hand-authored
 syntax data. It is optimised for exact-surface-form lookup at low memory: a
@@ -52,7 +52,7 @@ mirror of this document. `tools/lexicon/format/encode.ts` is the writer.
 | field         | type      | value / meaning                          |
 |---------------|-----------|------------------------------------------|
 | magic         | u8[4]     | `4D 42 4C 58` = ASCII `"MBLX"`           |
-| version       | u32       | `5`                                      |
+| version       | u32       | `6`                                      |
 | langLen       | u8        | byte length of `lang`                    |
 | lang          | u8[langLen] | UTF-8 language tag (`"pt-BR"`, `"en"`)  |
 | variantScheme | u8        | `VariantScheme`                          |
@@ -184,6 +184,10 @@ object (not a packed table). Schema (`SyntaxData` in `format/model.ts`):
   "particles": ["up"],          // verb-particle units ("gave up"); [] in pt
   "degreeAdverbs": ["more"],    // comparative scaffold: degree word on the adjective...
   "thanMarkers": ["than"],      // ...and the marker introducing the standard
+  "perfectAuxiliaries": ["have"], // lemmas heading the perfect periphrasis
+  "lightVerbs": [               // verb+noun pairs denoting one event
+    { "verb": "take", "noun": "walk", "lemma": "walk" } ],
+  "locativeMarkers": ["in"],    // adpositions governing places (entity typing)
   "verbFeats": {                // morphology-code prefixes, in this dict's feat vocabulary
     "finitePrefixes":     ["..."],
     "infinitivePrefixes": ["..."],
@@ -203,7 +207,7 @@ A reader may verify the trailer as an integrity/truncation check.
 
 ## Lookup algorithm (reference)
 
-1. Verify header magic and `version == 5`; read metadata.
+1. Verify header magic and `version == 6`; read metadata.
 2. Load the offset tables (sections 3–4) and keep `entriesBase` and the two
    pools addressable.
 3. `lookup(form)`: UTF-8-encode `form`; binary-search `formOffsets`/`formBlob`
@@ -229,7 +233,9 @@ History: v2 grew the syntax JSON schema (`relativePronouns`,
 inversion); v5 added the argument-structure and discourse lists
 (`dativeMarkers`, `negators`, `anaphoricPronouns`, `possessivePronouns`, the
 three clitic classes, `subordinators`, article definiteness, `temporalNouns`,
-`particles`, the comparative pair) and `verbFeats.gerundPrefixes`. The binary
+`particles`, the comparative pair) and `verbFeats.gerundPrefixes`; v6 added
+`perfectAuxiliaries`, `lightVerbs`, `locativeMarkers` and
+`verbFeats.tenseSenses`. The binary
 layout is unchanged since v1, but the schema is
 part of the reader contract — an engine handed an older dict would read
 `undefined` where it expects those lists — so the version gates it.

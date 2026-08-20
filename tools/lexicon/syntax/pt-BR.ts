@@ -261,11 +261,18 @@ export const PT_BR_SYNTAX: SyntaxData = {
   // Only the words that negate the VERB they precede; `sem` negates its own
   // PP/infinitive and stays out.
   negators: ["não", "nunca", "jamais", "nem"],
+  // The article-shaped accusative clitics (o/a/os/as) are anaphors TOO — the
+  // dataflow pass gates them on actually being a bound verb argument, so
+  // plain articles never fire.
   anaphoricPronouns: [
     { form: "ele", feat: "ms" },
     { form: "ela", feat: "fs" },
     { form: "eles", feat: "mp" },
     { form: "elas", feat: "fp" },
+    { form: "o", feat: "ms" },
+    { form: "a", feat: "fs" },
+    { form: "os", feat: "mp" },
+    { form: "as", feat: "fp" },
   ],
   possessivePronouns: ["seu", "sua", "seus", "suas"],
   // The unambiguous proclitic/enclitic object pronouns plus the enclitic
@@ -293,6 +300,27 @@ export const PT_BR_SYNTAX: SyntaxData = {
   degreeAdverbs: ["mais", "menos", "tão"],
   // `do que` reaches the standard through the `que` after the contraction.
   thanMarkers: ["que"],
+  perfectAuxiliaries: ["ter", "haver"],
+  // Verb+noun pairs meaning one event; curated to the pairs literary prose
+  // actually leans on.
+  lightVerbs: [
+    { verb: "dar", noun: "passeio", lemma: "passear" },
+    { verb: "dar", noun: "risada", lemma: "rir" },
+    { verb: "dar", noun: "gargalhada", lemma: "gargalhar" },
+    { verb: "dar", noun: "suspiro", lemma: "suspirar" },
+    { verb: "dar", noun: "grito", lemma: "gritar" },
+    { verb: "dar", noun: "passo", lemma: "andar" },
+    { verb: "fazer", noun: "pergunta", lemma: "perguntar" },
+    { verb: "fazer", noun: "viagem", lemma: "viajar" },
+    { verb: "fazer", noun: "promessa", lemma: "prometer" },
+    { verb: "tomar", noun: "banho", lemma: "banhar" },
+    { verb: "tomar", noun: "decisão", lemma: "decidir" },
+    { verb: "ter", noun: "medo", lemma: "temer" },
+    { verb: "ter", noun: "esperança", lemma: "esperar" },
+  ],
+  // Adpositions that govern places — the em-family and directionals; the
+  // de-family stays out (a genitive `de Rei` types no one as geography).
+  locativeMarkers: ["em", "no", "na", "nos", "nas", "para", "até", "ao", "à", "aos", "às"],
   // DELAF tense letters: P/I/J/F/Q presente..mais-que-perfeito, C condicional,
   // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio;
   // G gerúndio (the progressive/manner chains: `estava correndo`, `saiu correndo`).
@@ -307,5 +335,21 @@ export const PT_BR_SYNTAX: SyntaxData = {
     // this DELAF often labels those shared forms `1s` only (`esperava,I1s`
     // with no I3s line), so their person digit is noise.
     personDistinctPrefixes: ["P", "J", "F", "Y"],
+    // The timeline vocabulary: DELAF tense letter -> sense.
+    tenseSenses: [
+      { prefix: "P", sense: "present" },
+      { prefix: "I", sense: "imperfect" },
+      { prefix: "J", sense: "past" },
+      { prefix: "F", sense: "future" },
+      { prefix: "Q", sense: "pluperfect" },
+      { prefix: "C", sense: "conditional" },
+      { prefix: "S", sense: "subjunctive" },
+      { prefix: "T", sense: "subjunctive" },
+      { prefix: "U", sense: "subjunctive" },
+      { prefix: "Y", sense: "imperative" },
+      { prefix: "W", sense: "infinitive" },
+      { prefix: "K", sense: "participle" },
+      { prefix: "G", sense: "gerund" },
+    ],
   },
 }

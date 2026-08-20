@@ -91,6 +91,23 @@ export type VerbFeatMarks = {
   // (imperfeito `falava`, condicional `falaria`) are person-ambiguous and the
   // dictionary's 1s label there is an artifact, not a fact.
   personDistinctPrefixes: string[]
+  // Feat prefix -> tense/aspect sense, tried IN ORDER (so en PASTPART is
+  // declared before PAST). The timeline vocabulary downstream features read.
+  tenseSenses: TenseSense[]
+}
+
+export type TenseSense = {
+  prefix: string
+  sense: string
+}
+
+// A light-verb construction: verb + noun meaning one event (`dar um passeio`
+// = passear, `take a walk` = walk). The pair identifies it; `lemma` is the
+// unified event the pair denotes.
+export type LightVerbHint = {
+  verb: string
+  noun: string
+  lemma: string
 }
 
 // A third-person pronoun that refers back: its surface form and the agreement
@@ -155,7 +172,30 @@ export type SyntaxData = {
   // to (`que`, `than`).
   degreeAdverbs: string[]
   thanMarkers: string[]
+  // Lemmas heading the PERFECT periphrasis (ter/haver/have): with the passive
+  // auxiliaries, the only verbs a participle/gerund chains onto in tagging.
+  perfectAuxiliaries: string[]
+  // Verb+noun pairs that denote one event (`dar um passeio` = passear).
+  lightVerbs: LightVerbHint[]
+  // Adpositions that govern PLACES (em/no/para, in/at/to): a proper noun they
+  // introduce types as a place in the entity pass.
+  locativeMarkers: string[]
   verbFeats: VerbFeatMarks
+}
+
+// Which sense a verb feat carries on the timeline, first declared prefix
+// wins; none for a feat outside the declared vocabulary.
+export function verbTense(feat: string, marks: VerbFeatMarks): Optional<string> {
+  for (const { prefix, sense } of marks.tenseSenses) {
+    switch (feat.startsWith(prefix)) {
+      case true:
+        return { kind: "some", value: sense }
+      case false:
+        continue
+    }
+  }
+
+  return { kind: "none" }
 }
 
 export function byteToPos(b: number): Optional<Pos> {

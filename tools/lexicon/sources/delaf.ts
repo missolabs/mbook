@@ -171,6 +171,12 @@ function withModernTwins(entries: LexEntry[]): LexEntry[] {
   return out
 }
 
+// Diminutive lemma links deliberately have NO derivation pass here: DELAF
+// links the true diminutives natively (`gatinho,gato.N+Dim:Dms`,
+// `casinha,casa`), and every candidate a surface rule would add on top of
+// that is a lexicalized FALSE diminutive a base-existence check cannot catch
+// (galinha is not a little gala, focinho not a little foco, golfinho not a
+// little golfo — which is exactly why the dictionary left them unlinked).
 export function parseDelaf(text: string): LexEntry[] {
   const withoutBom = text.replace(/^﻿/, "")
 

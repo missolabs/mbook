@@ -54,6 +54,7 @@ export type RelationKind =
   | "temporal-of" // a time-naming adjunct (NAQUELA NOITE, li)
   | "reflexive-of" // the reflexive/reciprocal/impersonal clitic riding its verb (abraçaram-SE)
   | "adverbial-of" // an adverbial subordinate clause's subordinator, bound to the matrix verb
+  | "light-verb-of" // verb+noun denoting ONE event (deu um PASSEIO = passear); pair resolved in syntax data
 
 export type RelationProvenance = "heuristic" | "pinned"
 
@@ -93,9 +94,11 @@ export function bind(input: RelationInput): readonly Relation[] {
         addQuotativeInversion(relations, input, ci, pinnedSubjects)
         addSePassive(relations, input, ci, pinnedSubjects)
         addCliticArguments(relations, input, ci)
+        addBareProclitic(relations, input, ci)
         addComplementOrObject(relations, input, ci, pinnedSubjects)
         addRelativeObject(relations, input, ci)
         addPiedPipedRelative(relations, input, ci)
+        addLightVerb(relations, input, ci)
         addPredicate(relations, input, ci, pinnedSubjects)
         addPresentationalSubject(relations, input, ci, pinnedSubjects)
         addInfinitiveChain(relations, input, ci)
@@ -2032,6 +2035,92 @@ function cliticTokensOf(input: RelationInput, ci: number): readonly number[] {
   return out
 }
 
+// The article-shaped accusative proclitic: in `Eu o vi`, the `o` is him, not
+// a determiner — surface-identical to the article, distinguished by
+// POSITION: an unchunked determiner-tagged article directly against a verb
+// that takes objects, following other clause material (sentence-initial `O
+// vento...` chunks with its noun and never lands here).
+function addBareProclitic(relations: Relation[], input: RelationInput, ci: number): void {
+  const vp = input.chunks[ci]!
+
+  switch (takesObject(verbLemma(input.tokens, vp), input.syntax.valency)) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const at = vp.from - 1
+
+  switch (at >= 1) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const token = input.tokens[at]!
+
+  switch (token.role) {
+    case "punctuation":
+      return
+    case "content":
+      break
+  }
+
+  const lower = token.tagged.token.text.toLowerCase()
+
+  const articleClitic =
+    token.tagged.pos === "DET" &&
+    input.syntax.definiteArticles.includes(lower) &&
+    input.chunks.some((c) => at >= c.from && at < c.to) === false &&
+    input.tokens[at - 1]!.role === "content"
+
+  switch (articleClitic) {
+    case false:
+      return
+    case true:
+      relations.push(relation("object-of", at, vp.head, "heuristic"))
+      return
+  }
+}
+
+// The light-verb construction: when the verb's object completes a declared
+// verb+noun pair (`deu um passeio`), the pair is marked as ONE event — the
+// unified lemma lives in the syntax data, keyed by the same pair.
+function addLightVerb(relations: Relation[], input: RelationInput, ci: number): void {
+  const vp = input.chunks[ci]!
+  const verb = verbLemma(input.tokens, vp)
+
+  const object = relations.find((r) => r.kind === "object-of" && r.head === vp.head)
+
+  switch (object === undefined) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const noun = input.tokens[object!.dependent]!
+
+  switch (noun.role) {
+    case "punctuation":
+      return
+    case "content":
+      break
+  }
+
+  const pair = input.syntax.lightVerbs.some((l) => l.verb === verb && l.noun === noun.tagged.lemma)
+
+  switch (pair) {
+    case false:
+      return
+    case true:
+      relations.push(relation("light-verb-of", object!.dependent, vp.head, "heuristic"))
+      return
+  }
+}
+
 // ─── verb chains and particles ───────────────────────────────────────────────
 // The gerund mirror of the participle chain: the progressive periphrasis
 // (`estava correndo`, `was running`) and the manner chain (`saiu correndo`)
@@ -2405,6 +2494,8 @@ function spreadsAcrossCoordination(kind: RelationKind): boolean {
     case "reflexive-of":
       return false
     case "adverbial-of":
+      return false
+    case "light-verb-of":
       return false
   }
 }

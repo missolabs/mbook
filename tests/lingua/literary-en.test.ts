@@ -12,6 +12,7 @@ import { scanLine } from "../../src/shared/book/glyphs"
 import type { Cast } from "../../src/shared/book/cast"
 import { openLexicon } from "../../src/shared/lingua/lexicon"
 import type { Lexicon } from "../../src/shared/lingua/lexicon"
+import { verbTense } from "../../src/shared/lingua/model"
 import { analyzeParagraph } from "../../src/shared/lingua/pipeline"
 import type { ParagraphAnalysis, Sentence } from "../../src/shared/lingua/pipeline"
 import type { Relation, RelationKind } from "../../src/shared/lingua/binder"
@@ -410,5 +411,43 @@ describe("polarity, progressives, comparison, clauses", () => {
     expect(relation(sentence, "modifier-of", "man", "cat")).toBeDefined()
     expect(dependentsOf(sentence, "subject-of", "vanished")).toEqual(["cat"])
     expect(dependentsOf(sentence, "subject-of", "wept")).toEqual(["man"])
+
+    // Two adjacent finite verbs are two clauses: no junk perfect minted.
+    expect(tagged(sentence, "wept").feat).toBe("PAST")
+    expect(sentence.relations.filter((r) => r.kind === "complement-of")).toEqual([])
+  })
+
+  it("the perfect still chains — its auxiliary is a declared one", () => {
+    const sentence = only("She had walked.")
+
+    expect(tagged(sentence, "walked").feat).toBe("PASTPART")
+    expect(relation(sentence, "complement-of", "walked", "had")).toBeDefined()
+  })
+})
+
+describe("dialogue tails, light verbs and the timeline", () => {
+  it("observed joins the dicendi — safe because English never drops subjects", () => {
+    const tail = only("“The spiral is endless,” observed Kumiko.")
+
+    expect(dependentsOf(tail, "subject-of", "observed")).toEqual(["Kumiko"])
+    expect(dependentsOf(tail, "object-of", "observed")).toEqual([])
+
+    const svo = only("Kumiko observed Kirie.")
+
+    expect(relation(svo, "object-of", "Kirie", "observed")).toBeDefined()
+  })
+
+  it("marks take-a-walk as one event", () => {
+    const sentence = only("He took a walk.")
+
+    expect(relation(sentence, "light-verb-of", "walk", "took")).toBeDefined()
+  })
+
+  it("classifies feats onto the timeline — PASTPART before PAST", () => {
+    const marks = EN.syntax.verbFeats
+
+    expect(verbTense("PASTPART", marks)).toEqual({ kind: "some", value: "participle" })
+    expect(verbTense("PAST", marks)).toEqual({ kind: "some", value: "past" })
+    expect(verbTense("PROG", marks)).toEqual({ kind: "some", value: "gerund" })
   })
 })
