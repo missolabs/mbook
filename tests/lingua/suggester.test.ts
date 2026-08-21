@@ -55,11 +55,16 @@ describe("suggestTargets", () => {
 
     expect(suggestTargets(plurals)).toEqual([])
 
-    // An empty binding whose display happens to be plural still asks — the
-    // author wrote the glyph on purpose.
+    // A plural empty binding is refused too: its honest answer is SEVERAL
+    // names, which is the multi-name completion's job, not a single enum's.
     const authored: DiagnosticPayload = { kind: "empty-binding", from: 0, to: 9, detail: "elas" }
 
-    expect(suggestTargets([authored])).toEqual([authored])
+    expect(suggestTargets([authored])).toEqual([])
+
+    // A singular display keeps its suggestion.
+    const singular: DiagnosticPayload = { kind: "empty-binding", from: 0, to: 8, detail: "Ela" }
+
+    expect(suggestTargets([singular])).toEqual([singular])
   })
 })
 

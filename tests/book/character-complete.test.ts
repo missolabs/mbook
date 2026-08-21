@@ -460,6 +460,52 @@ describe("ranking — gender, recency, declaration", () => {
   })
 })
 
+describe("multi-name bindings in the completion", () => {
+  it("a comma opens the next name — the segment starts after it", () => {
+    expect(at("{elas}[João, Ma|")).toEqual({ kind: "open", from: 13, partial: "Ma", closed: false })
+
+    expect(at("{elas}[João,|")).toEqual({ kind: "open", from: 12, partial: "", closed: false })
+  })
+
+  it("offers the cast for the new segment, minus everyone already listed", () => {
+    const { result } = sourceAt("{elas}[Maria Costa, |")
+
+    expect(labels(result)).toEqual(["João", "Senhor Almeida"])
+  })
+
+  it("accepting the second name completes the group", () => {
+    const { result, state } = sourceAt("{elas}[Maria Costa, jo|")
+
+    expect(labels(result)).toEqual(["João"])
+
+    const { doc, cursor } = accept(state, result!, result!.options[0]!)
+
+    expect(doc.endsWith("{elas}[Maria Costa, João]")).toBe(true)
+    expect(cursor).toBe(doc.length)
+  })
+
+  it("a `]` hugging the cursor is still stepped over, never doubled", () => {
+    const { doc } = acceptOnly("{elas}[João, mar|]")
+
+    expect(doc.endsWith("{elas}[João, Maria Costa]")).toBe(true)
+    expect(doc.endsWith("]]")).toBe(false)
+  })
+
+  it("the display group's gender still ranks the segment across the comma", () => {
+    setCastGenders([
+      { slug: "joao", gender: "m" },
+      { slug: "maria-costa", gender: "f" },
+      { slug: "senhor-almeida", gender: "m" },
+    ])
+
+    const { result } = sourceAt("{elas}[João, |")
+
+    expect(labels(result)).toEqual(["Maria Costa", "Senhor Almeida"])
+
+    setCastGenders([])
+  })
+})
+
 // The corners the earlier rounds left unpinned.
 describe("openers that must never offer the cast", () => {
   it("a time pin `~[` takes a date, not a name", () => {

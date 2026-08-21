@@ -17,6 +17,9 @@
 //                      metadata is not typeset. Its payload rides `text`.
 // A bare `[qualquer coisa]` in prose is ordinary text: the `[Name]` binding is
 // recognized ONLY in the anchored positions above, never on its own.
+//
+// Any binding position accepts SEVERAL names, comma-separated —
+// `{elas}[Esposa, Filha]`, `—[Rei, Daniela]` — producing a group binding.
 
 import type { Cast, Resolution } from "./cast"
 import { resolve } from "./cast"
@@ -25,7 +28,56 @@ export type GlyphKind = "subject-mention" | "speech" | "character-written" | "ti
 
 export type Range = { from: number; to: number }
 
-export type Binding = Resolution | { kind: "unknown" }
+// A binding names one character — or, comma-separated, SEVERAL at once:
+// `{elas}[Esposa, Filha]` binds the plural display to both members. A group
+// keeps its unresolved names alongside its resolved slugs so each missing
+// declaration can be flagged on its own.
+export type Binding =
+  | Resolution
+  | { kind: "unknown" }
+  | { kind: "group"; slugs: readonly string[]; unresolved: readonly string[] }
+
+// The payload between the brackets, resolved: a comma splits it into a group
+// (empty segments dropped, so a trailing comma is forgiven); anything without
+// a comma stays the single resolution it always was.
+function resolveBinding(cast: Cast, payload: string): Binding {
+  switch (payload.includes(",")) {
+    case false:
+      return resolve(cast, payload)
+    case true:
+      break
+  }
+
+  const names = payload
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0)
+
+  switch (names.length < 2) {
+    case true:
+      return resolve(cast, names[0] ?? payload)
+    case false:
+      break
+  }
+
+  const slugs: string[] = []
+  const unresolved: string[] = []
+
+  for (const name of names) {
+    const resolution = resolve(cast, name)
+
+    switch (resolution.kind) {
+      case "resolved":
+        slugs.push(resolution.slug)
+        continue
+      case "unresolved":
+        unresolved.push(name)
+        continue
+    }
+  }
+
+  return { kind: "group", slugs, unresolved }
+}
 
 // Offsets are relative to the start of the scanned line.
 export type LineSpan = {
@@ -145,7 +197,7 @@ function speechBinding(text: string, cast: Cast): SpeechBinding {
     case "none":
       return { hidden: [], binding: { kind: "unknown" } }
     case "some":
-      return { hidden: [{ from: 1, to: bracket.close + 1 }], binding: resolve(cast, bracket.name) }
+      return { hidden: [{ from: 1, to: bracket.close + 1 }], binding: resolveBinding(cast, bracket.name) }
   }
 }
 
@@ -252,7 +304,7 @@ function mentionSpan(text: string, index: number, name: string, close: number, c
     to,
     hidden,
     text: stripHidden(text, index, to, hidden),
-    binding: resolve(cast, name),
+    binding: resolveBinding(cast, name),
   }
 
   return { kind: "emit", span, next: to }
@@ -301,7 +353,7 @@ function displaySpan(text: string, index: number, brace: number, name: string, c
     to,
     hidden,
     text: stripHidden(text, index, to, hidden),
-    binding: resolve(cast, name),
+    binding: resolveBinding(cast, name),
   }
 
   return { kind: "emit", span, next: to }
@@ -339,7 +391,7 @@ function writtenSpan(text: string, index: number, closer: string, name: string, 
     to: runEnd,
     hidden,
     text: stripHidden(text, index, runEnd, hidden),
-    binding: resolve(cast, name),
+    binding: resolveBinding(cast, name),
   }
 
   return { kind: "emit", span, next: runEnd }

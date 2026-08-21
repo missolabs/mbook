@@ -314,7 +314,10 @@ function subjectPins(sentence: Sentence, spans: readonly LineSpan[]): readonly S
   const pins: SubjectPin[] = []
 
   for (const span of spans) {
-    const resolved = span.kind === "subject-mention" && span.binding.kind === "resolved"
+    // A group pins exactly like a single resolved mention — the author named
+    // the subject either way.
+    const resolved =
+      span.kind === "subject-mention" && (span.binding.kind === "resolved" || span.binding.kind === "group")
 
     switch (resolved) {
       case false:
@@ -377,6 +380,18 @@ function speakerOf(binding: Binding): Speaker {
       return { kind: "unresolved", name: binding.name }
     case "unknown":
       return { kind: "unknown" }
+    // Attribution is a single column: a duet line (`—[Rei, Daniela]`) is
+    // credited to its FIRST member — the span rows still record them all.
+    case "group": {
+      const lead = binding.slugs[0]
+
+      switch (lead === undefined) {
+        case true:
+          return { kind: "unknown" }
+        case false:
+          return { kind: "slug", slug: lead! }
+      }
+    }
   }
 }
 

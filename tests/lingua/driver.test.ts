@@ -530,6 +530,59 @@ describe("split antecedents stand the pronoun lint down", () => {
   })
 })
 
+describe("multi-name bindings", () => {
+  it("a group glyph stands the lint down and pins the subject", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "character: Daniela",
+      "---",
+      "",
+      "Vi Mizoguchi no mercado. {Elas}[Rei, Daniela] não me viram.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.diagnostics.filter((d) => d.kind === "unresolved-pronoun")).toEqual([])
+    expect(analysis.diagnostics.filter((d) => d.kind === "empty-binding")).toEqual([])
+  })
+
+  it("each unresolved member of a group earns its own note", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "{elas}[Rei, Esposa, Filha] chegaram cedo.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+    const notes = analysis.diagnostics.filter((d) => d.kind === "unresolved-name")
+
+    expect(notes.map((n) => n.detail)).toEqual(["Esposa", "Filha"])
+    expect(analysis.unresolved).toEqual(["Esposa", "Filha"])
+  })
+
+  it("a gendered group display genders EVERY member it binds", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Hellmanns",
+      "character: Watson",
+      "---",
+      "",
+      "{Elas}[Hellmanns, Watson] dormiam. {Elas}[Hellmanns, Watson] acordaram.",
+    ].join("\n")
+
+    const members = analyze(book, BOTH).castMembers
+
+    expect(members.find((m) => m.slug === "hellmanns")?.gender).toBe("f")
+    expect(members.find((m) => m.slug === "watson")?.gender).toBe("f")
+  })
+})
+
 describe("cast gender", () => {
   function genderOf(analysisMembers: ReturnType<typeof analyze>["castMembers"], slug: string): string {
     return analysisMembers.find((m) => m.slug === slug)?.gender ?? "missing"

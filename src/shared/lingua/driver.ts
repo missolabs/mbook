@@ -357,7 +357,37 @@ function collectDiagnostics(
     })
 
     for (const anchored of slot.analysis.spans) {
-      switch (anchored.span.binding.kind === "unresolved" && anchored.anchor.kind === "in-sentence") {
+      switch (anchored.anchor.kind === "in-sentence") {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      // A group flags each of ITS unresolved members on its own — the
+      // resolved ones need nothing.
+      switch (anchored.span.binding.kind === "group") {
+        case true: {
+          const sentence = (anchored.anchor as { sentence: number }).sentence
+          const token = (anchored.anchor as { tokens: readonly number[] }).tokens[0] ?? -1
+
+          for (const member of (anchored.span.binding as { unresolved: readonly string[] }).unresolved) {
+            out.push({
+              kind: "unresolved-name",
+              paragraph: slot.index,
+              sentence,
+              token,
+              detail: member,
+              ...spread(rangeOf(slot, sentence, token)),
+            })
+          }
+          continue
+        }
+        case false:
+          break
+      }
+
+      switch (anchored.span.binding.kind === "unresolved") {
         case false:
           continue
         case true:
@@ -841,15 +871,20 @@ function authoredGender(slug: string, spans: readonly GlyphSpan[], lexicon: Lexi
   for (const span of spans) {
     const binding = span.binding
 
+    // A group display genders EVERY member it binds — `{elas}[Esposa, Filha]`
+    // is the author saying feminine of both.
     switch (binding.kind) {
       case "resolved":
+      case "group":
         break
       case "unresolved":
       case "unknown":
         continue
     }
 
-    switch (binding.slug === slug) {
+    const bound = binding.kind === "resolved" ? [binding.slug] : binding.slugs
+
+    switch (bound.includes(slug)) {
       case false:
         continue
       case true:
@@ -1609,35 +1644,30 @@ function unresolvedNames(spans: readonly GlyphSpan[]): readonly string[] {
   const out: string[] = []
 
   for (const span of spans) {
-    const name = unresolvedOf(span.binding)
-
-    switch (name.kind) {
-      case "none":
-        continue
-      case "some":
-        break
-    }
-
-    switch (seen.has(name.value)) {
-      case true:
-        continue
-      case false:
-        seen.add(name.value)
-        out.push(name.value)
-        continue
+    for (const name of unresolvedOf(span.binding)) {
+      switch (seen.has(name)) {
+        case true:
+          continue
+        case false:
+          seen.add(name)
+          out.push(name)
+          continue
+      }
     }
   }
 
   return out
 }
 
-function unresolvedOf(binding: Binding): Optional<string> {
+function unresolvedOf(binding: Binding): readonly string[] {
   switch (binding.kind) {
     case "unresolved":
-      return { kind: "some", value: binding.name }
+      return [binding.name]
+    case "group":
+      return binding.unresolved
     case "resolved":
-      return { kind: "none" }
+      return []
     case "unknown":
-      return { kind: "none" }
+      return []
   }
 }

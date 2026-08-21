@@ -165,3 +165,32 @@ describe("time pins", () => {
     expect(scanLine("~ nada aqui", cast)).toEqual([])
   })
 })
+
+describe("multi-name bindings", () => {
+  it("a comma splits the payload into a group of slugs", () => {
+    const span = only("{elas}[João, Maria] saíram.")
+
+    expect(span.kind).toBe("subject-mention")
+    expect(span.text).toBe("elas")
+    expect(span.binding).toEqual({ kind: "group", slugs: ["joao", "maria"], unresolved: [] })
+  })
+
+  it("keeps each unresolved member by name, alongside the resolved slugs", () => {
+    const span = only("@[João, Mizoguchi] chegaram.")
+
+    expect(span.binding).toEqual({ kind: "group", slugs: ["joao"], unresolved: ["Mizoguchi"] })
+  })
+
+  it("forgives a trailing comma — one name stays the single resolution", () => {
+    const span = only("@[João,] acendeu.")
+
+    expect(span.binding).toEqual({ kind: "resolved", slug: "joao" })
+  })
+
+  it("binds a duet dialogue line", () => {
+    const span = only("—[João, Maria] Boa noite.")
+
+    expect(span.kind).toBe("speech")
+    expect(span.binding).toEqual({ kind: "group", slugs: ["joao", "maria"], unresolved: [] })
+  })
+})

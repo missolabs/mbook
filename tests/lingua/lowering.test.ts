@@ -64,6 +64,23 @@ const BOOK = [
 describe("BookAnalysis -> relational rows", () => {
   const rows = analysisToRows(analyze(BOOK))
 
+  it("fans a group binding out into one span row per member", () => {
+    const duet = analysisToRows(
+      analyze(
+        ["---", "language: pt-BR", "character: João", "character: Maria", "---", "", "{eles}[João, Maria, Ana] saíram."].join(
+          "\n",
+        ),
+      ),
+    )
+
+    const grouped = duet.spans.filter((s) => s.kind === "subject-mention")
+
+    expect(grouped.length).toBe(3)
+    expect(grouped.map((s) => (s.slug.kind === "some" ? s.slug.value : null))).toEqual(["joao", "maria", null])
+    expect(grouped[2]!.unresolvedName).toEqual({ kind: "some", value: "Ana" })
+    expect(new Set(grouped.map((s) => `${s.charStart}:${s.charEnd}`)).size).toBe(1)
+  })
+
   it("maps the cast to character rows with slug, canonical name and gender", () => {
     expect(rows.characters).toEqual([
       { slug: "joao", canonical: "João", gender: "m" },

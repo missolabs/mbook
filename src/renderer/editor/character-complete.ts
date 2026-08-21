@@ -46,38 +46,61 @@ export function detectBinding(line: string, cursor: number): Binding {
       break
   }
 
-  const partial = before.slice(bracket + 1)
+  const payload = before.slice(bracket + 1)
 
-  switch (partial.includes("]")) {
+  switch (payload.includes("]")) {
     case true:
       return { kind: "none" }
     case false:
       break
   }
 
-  return classifyOpener(openerAt(line, bracket), bracket, partial, line[cursor] === "]")
+  // A comma opens the NEXT name of a multi-binding (`{elas}[Rei, Da…`): the
+  // completable segment starts after the last comma and its spaces, so
+  // acceptance replaces only the name being typed.
+  const segment = segmentOf(bracket, payload)
+
+  return classifyOpener(openerAt(line, bracket), bracket, segment, line[cursor] === "]")
 }
 
-function classifyOpener(opener: Opener, bracket: number, partial: string, closed: boolean): Binding {
+type Segment = { from: number; partial: string }
+
+function segmentOf(bracket: number, payload: string): Segment {
+  const comma = payload.lastIndexOf(",")
+
+  switch (comma < 0) {
+    case true:
+      return { from: bracket + 1, partial: payload }
+    case false:
+      break
+  }
+
+  const tail = payload.slice(comma + 1)
+  const spaces = tail.length - tail.trimStart().length
+
+  return { from: bracket + 1 + comma + 1 + spaces, partial: tail.trimStart() }
+}
+
+function classifyOpener(opener: Opener, bracket: number, segment: Segment, closed: boolean): Binding {
   switch (opener.kind) {
     case "not-an-opener":
       return { kind: "none" }
     case "anywhere":
-      return { kind: "open", from: bracket + 1, partial, closed }
+      return { kind: "open", from: segment.from, partial: segment.partial, closed }
     case "line-lead":
-      return leadBinding(bracket, partial, closed)
+      return leadBinding(bracket, segment, closed)
   }
 }
 
 // The dialogue dash hugs the line start: `—[` binds only when the dash is the
 // line's first character, so `[` sits at column 1. A `—[` deeper in the line is
 // ordinary prose and opens nothing.
-function leadBinding(bracket: number, partial: string, closed: boolean): Binding {
+function leadBinding(bracket: number, segment: Segment, closed: boolean): Binding {
   switch (bracket === 1) {
     case false:
       return { kind: "none" }
     case true:
-      return { kind: "open", from: bracket + 1, partial, closed }
+      return { kind: "open", from: segment.from, partial: segment.partial, closed }
   }
 }
 
@@ -129,7 +152,14 @@ export function characterCompletions(context: CompletionContext): CompletionResu
       break
   }
 
-  const matches = matchCharacters(deriveCast(context.state), binding.partial)
+  // The opener bracket — for a multi-binding the segment start sits past it,
+  // so scan back rather than assume adjacency.
+  const bracket = line.text.lastIndexOf("[", binding.from - 1)
+
+  const matches = withoutListed(
+    matchCharacters(deriveCast(context.state), binding.partial),
+    line.text.slice(bracket + 1, binding.from),
+  )
 
   switch (matches.length === 0) {
     case true:
@@ -138,7 +168,7 @@ export function characterCompletions(context: CompletionContext): CompletionResu
       break
   }
 
-  const display = displayBefore(line.text, binding.from - 1)
+  const display = displayBefore(line.text, bracket)
 
   const ranked = rankCharacters(
     matches,
@@ -156,6 +186,26 @@ export function characterCompletions(context: CompletionContext): CompletionResu
     filter: false,
     options: ranked.map((character) => option(character, binding.closed)),
   }
+}
+
+// Members already named earlier in a multi-binding never re-offer — `{elas}
+// [Rei, ` lists everyone but Rei.
+function withoutListed(matches: readonly Character[], listed: string): readonly Character[] {
+  switch (listed.includes(",")) {
+    case false:
+      return matches
+    case true:
+      break
+  }
+
+  const taken = new Set(
+    listed
+      .split(",")
+      .map((name) => foldKey(name.trim()))
+      .filter((key) => key.length > 0),
+  )
+
+  return matches.filter((character) => taken.has(foldKey(character.name)) === false)
 }
 
 // The display group's text when the opener is `}[` — the matching `{` scanned

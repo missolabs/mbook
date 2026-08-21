@@ -34,9 +34,11 @@ const MODELS = ["gemma3:12b", "gemma3:4b"]
 
 const TARGET_KINDS = new Set(["unresolved-pronoun", "empty-binding"])
 
-// A plural pronoun can never mean ONE cast member — the enum would force a
-// bluff (the battery's dangling `elas` answered `Rei`). Plurals are the
-// engine's split-antecedent rule to resolve; the sidecar refuses the question.
+// A plural can never mean ONE cast member — the enum would force a bluff
+// (the battery's dangling `elas` answered `Rei`). A dangling plural is the
+// engine's split-antecedent rule to resolve; an authored plural glyph is the
+// multi-name binding's (`{elas}[Esposa, Filha]`). Either way the sidecar
+// refuses the question.
 const PLURAL_PRONOUNS = new Set(["eles", "elas", "they", "them"])
 
 // At most this many asks per analysis pass — a page of dangling pronouns must
@@ -56,7 +58,7 @@ export function suggestTargets(items: readonly DiagnosticPayload[]): readonly Di
         continue
     }
 
-    switch (item.kind === "unresolved-pronoun" && PLURAL_PRONOUNS.has(item.detail.toLowerCase())) {
+    switch (PLURAL_PRONOUNS.has(item.detail.trim().toLowerCase())) {
       case true:
         continue
       case false:

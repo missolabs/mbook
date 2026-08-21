@@ -982,7 +982,10 @@ function laterAnchor(a: Anchor, b: Anchor): boolean {
 }
 
 function firstPersonMentionAnchor(input: DiscourseInput, anchored: AnchoredSpan): Optional<Anchor> {
-  switch (anchored.span.kind === "subject-mention" && anchored.span.binding.kind === "resolved") {
+  switch (
+    anchored.span.kind === "subject-mention" &&
+    (anchored.span.binding.kind === "resolved" || anchored.span.binding.kind === "group")
+  ) {
     case false:
       return { kind: "none" }
     case true:
@@ -1845,6 +1848,10 @@ function mentionSlug(anchored: AnchoredSpan, sentence: number, token: number): O
     case "unresolved":
       return { kind: "none" }
     case "unknown":
+      return { kind: "none" }
+    // A group has no SINGLE identity — a duet mention is never "the same
+    // character" as anything, so coreference passes it by.
+    case "group":
       return { kind: "none" }
     case "resolved":
       break

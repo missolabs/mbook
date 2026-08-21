@@ -276,7 +276,7 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
     detail: d.detail,
   }))
 
-  const spans = analysis.spans.map(spanRow)
+  const spans = analysis.spans.flatMap(spanRows)
 
   return { characters, sentences, spans, discourseLinks, timelineEvents, timelineEdges, entities, aliases, turnGuesses, timelineAnchors, aliasMentions, diagnostics }
 }
@@ -342,16 +342,18 @@ function tokenRow(token: AnalyzedToken, idx: number): TokenRow {
   }
 }
 
-function spanRow(span: GlyphSpan): SpanRow {
-  const binding = bindingParts(span.binding)
-
-  return {
+// One row per bound member: a single binding is one row as ever; a group
+// (`{elas}[Esposa, Filha]`) fans out into a row per slug and a row per
+// unresolved name, all sharing the glyph's range — relationally flat, no
+// schema change.
+function spanRows(span: GlyphSpan): readonly SpanRow[] {
+  return bindingPartsAll(span.binding).map((binding) => ({
     kind: span.kind,
     charStart: span.from,
     charEnd: span.to,
     slug: binding.slug,
     unresolvedName: binding.name,
-  }
+  }))
 }
 
 type ChapterParts = { idx: Optional<number>; title: Optional<string> }
@@ -394,13 +396,20 @@ function speakerSlug(speaker: Speaker): Optional<string> {
 
 type BindingParts = { slug: Optional<string>; name: Optional<string> }
 
-function bindingParts(binding: Binding): BindingParts {
+function bindingPartsAll(binding: Binding): readonly BindingParts[] {
   switch (binding.kind) {
     case "resolved":
-      return { slug: { kind: "some", value: binding.slug }, name: { kind: "none" } }
+      return [{ slug: { kind: "some", value: binding.slug }, name: { kind: "none" } }]
     case "unresolved":
-      return { slug: { kind: "none" }, name: { kind: "some", value: binding.name } }
+      return [{ slug: { kind: "none" }, name: { kind: "some", value: binding.name } }]
     case "unknown":
-      return { slug: { kind: "none" }, name: { kind: "none" } }
+      return [{ slug: { kind: "none" }, name: { kind: "none" } }]
+    case "group":
+      return [
+        ...binding.slugs.map((slug): BindingParts => ({ slug: { kind: "some", value: slug }, name: { kind: "none" } })),
+        ...binding.unresolved.map(
+          (name): BindingParts => ({ slug: { kind: "none" }, name: { kind: "some", value: name } }),
+        ),
+      ]
   }
 }
