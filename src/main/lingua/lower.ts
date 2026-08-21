@@ -89,6 +89,21 @@ export type TimelineEventRow = {
   lane: string
   sense: string
   effect: string
+  aspect: string
+}
+
+export type TimelineAnchorRow = {
+  paragraphIdx: number
+  sentenceIdx: number
+  tokenIdx: number
+  value: string
+}
+
+export type AliasMentionRow = {
+  paragraphIdx: number
+  sentenceIdx: number
+  tokenIdx: number
+  slug: string
 }
 
 export type TimelineEdgeRow = {
@@ -128,6 +143,8 @@ export type AnalysisRows = {
   entities: readonly EntityRow[]
   aliases: readonly AliasRow[]
   turnGuesses: readonly TurnGuessRow[]
+  timelineAnchors: readonly TimelineAnchorRow[]
+  aliasMentions: readonly AliasMentionRow[]
 }
 
 export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
@@ -170,6 +187,7 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
 
   const timelineEvents: TimelineEventRow[] = []
   const timelineEdges: TimelineEdgeRow[] = []
+  const timelineAnchors: TimelineAnchorRow[] = []
 
   for (const slot of analysis.paragraphs) {
     for (const event of slot.analysis.timeline.events) {
@@ -180,6 +198,16 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
         lane: event.lane,
         sense: event.sense,
         effect: event.effect,
+        aspect: event.aspect,
+      })
+    }
+
+    for (const anchor of slot.analysis.timeline.anchors) {
+      timelineAnchors.push({
+        paragraphIdx: slot.index,
+        sentenceIdx: anchor.sentence,
+        tokenIdx: anchor.token,
+        value: anchor.value,
       })
     }
 
@@ -213,10 +241,16 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
   const entities = analysis.entities.map((e) => ({ name: e.name, kind: e.kind, mentions: e.mentions }))
   const aliases = analysis.aliases.map((a) => ({ slug: a.slug, description: a.description }))
   const turnGuesses = analysis.turnGuesses.map((t) => ({ paragraphIdx: t.paragraph, slug: t.slug }))
+  const aliasMentions = analysis.aliasMentions.map((m) => ({
+    paragraphIdx: m.paragraph,
+    sentenceIdx: m.sentence,
+    tokenIdx: m.token,
+    slug: m.slug,
+  }))
 
   const spans = analysis.spans.map(spanRow)
 
-  return { characters, sentences, spans, discourseLinks, timelineEvents, timelineEdges, entities, aliases, turnGuesses }
+  return { characters, sentences, spans, discourseLinks, timelineEvents, timelineEdges, entities, aliases, turnGuesses, timelineAnchors, aliasMentions }
 }
 
 function sentenceRow(sentence: Sentence, location: SentenceLocation, paragraphIdx: number, idx: number): SentenceRow {

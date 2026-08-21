@@ -969,11 +969,79 @@ describe("the timeline: deterministic event ordering", () => {
     ])
   })
 
-  it("negation, present commentary and subjunctives never order anything", () => {
+  it("negation, commentary and reported belief never order the narrative", () => {
     const text = "Rei não abriu a porta. Acho que talvez chovesse."
 
-    expect(lanes(text)).toEqual(["abriu:negated", "Acho:offline", "chovesse:irrealis"])
-    expect(edgeWords(text)).toEqual([])
+    // `chovesse` sits inside acho's complement: a reported belief, not a
+    // free-floating irrealis.
+    expect(lanes(text)).toEqual(["abriu:negated", "Acho:offline", "chovesse:reported"])
+    expect(edgeWords(text).filter((e) => !e.includes("reported-tense"))).toEqual([])
+  })
+
+  it("a bare subjunctive stays irrealis", () => {
+    const text = "Talvez chovesse."
+
+    expect(lanes(text)).toEqual(["chovesse:irrealis"])
+  })
+
+  it("sequence-of-tense orders reported claims relative to the saying", () => {
+    expect(edgeWords("Rei disse que Kirie fugiu.")).toEqual(["before:fugiu->disse:reported-tense"])
+    expect(edgeWords("Rei disse que Kirie viria.")).toEqual(["before:disse->viria:reported-tense"])
+  })
+
+  it("events carry their Aktionsart", () => {
+    const arrival = analyze("Kirie chegou.")
+
+    expect(arrival.timeline.events[0]!.aspect).toBe("achievement")
+
+    const dwelling = analyze("Kirie morava na cidade.")
+
+    expect(dwelling.timeline.events[0]!.aspect).toBe("state")
+  })
+
+  it("calendar anchors: years and ages pin the narrative", () => {
+    const year = analyze("Mudei para S em 1994.")
+
+    expect(year.timeline.anchors).toEqual([{ sentence: 0, token: 4, value: "year:1994" }])
+
+    const age = analyze("Aos 17 anos, fugi de casa.")
+
+    expect(age.timeline.anchors[0]!.value).toBe("age:17")
+  })
+})
+
+describe("fragments, focus and the gapped clause", () => {
+  it("gapping: the remnants take the same verb", () => {
+    const sentence = only("Kumiko comprou pão; Kirie, vinho.")
+
+    expect(relation(sentence, "subject-of", "Kirie", "comprou")).toBeDefined()
+    expect(relation(sentence, "object-of", "vinho", "comprou")).toBeDefined()
+  })
+
+  it("a verbless polar fragment copies the previous verb", () => {
+    const analysis = analyze("Kirie chorou. Eu também.")
+    const links = analysis.discourse.filter((d) => d.kind === "fragment")
+
+    expect(links.length).toBe(1)
+    expect(links[0]!.toSentence).toBe(0)
+
+    const to = analysis.sentences[0]!.tokens[links[0]!.toToken]!
+    expect(to.role === "content" && to.tagged.token.text).toBe("chorou")
+  })
+
+  it("focus particles bind their associate — after, or before across the particle", () => {
+    const scalar = only("Até Kirie chorou.")
+
+    expect(relation(scalar, "focus-of", "Até", "Kirie")).toBeDefined()
+
+    const additive = only("Kirie também chorou.")
+
+    expect(relation(additive, "focus-of", "também", "Kirie")).toBeDefined()
+
+    // The directional homograph stands down.
+    const directional = only("Andou até o bar.")
+
+    expect(directional.relations.filter((r) => r.kind === "focus-of")).toEqual([])
   })
 
   it("speech lives on its own lane", () => {

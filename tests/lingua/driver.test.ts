@@ -309,6 +309,23 @@ describe("aliases, turns and chapter boundaries", () => {
     expect(analysis.aliases).toEqual([{ slug: "rei", description: "detetive" }])
   })
 
+  it("a later definite description resolves through the learned registry", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "Rei, o detetive, chegou cedo.",
+      "",
+      "O detetive sorriu.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.aliasMentions).toEqual([{ paragraph: 1, sentence: 0, token: 1, slug: "rei" }])
+  })
+
   it("unattributed dialogue turns alternate between the two participants", () => {
     const book = [
       "---",

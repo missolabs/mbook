@@ -517,4 +517,33 @@ describe("modals, reports and negatives in English", () => {
 
     expect(relation(sentence, "subject-of", "Nothing", "remained").polarity).toBe("negative")
   })
+
+  it("sequence-of-tense: the claim orders against the saying", () => {
+    expect(edgeWordsOf("She said that he left.")).toEqual(["before:left->said:reported-tense"])
+  })
+
+  it("only binds its associate", () => {
+    const sentence = only("Only Kumiko knew.")
+
+    expect(relation(sentence, "focus-of", "Only", "Kumiko")).toBeDefined()
+  })
 })
+
+function edgeWordsOf(text: string) {
+  const analysis = analyze(text)
+
+  const at = (si: number, ti: number): string => {
+    const t = analysis.sentences[si]!.tokens[ti]!
+
+    switch (t.role) {
+      case "content":
+        return t.tagged.token.text
+      case "punctuation":
+        return t.token.text
+    }
+  }
+
+  return analysis.timeline.edges.map(
+    (e) => `${e.kind}:${at(e.fromSentence, e.fromToken)}->${at(e.toSentence, e.toToken)}:${e.provenance}`,
+  )
+}

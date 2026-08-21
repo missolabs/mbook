@@ -1,4 +1,4 @@
-# mbook `.dict` format (v8)
+# mbook `.dict` format (v9)
 
 One `.dict` file holds one language's compiled lexicon **and** its hand-authored
 syntax data. It is optimised for exact-surface-form lookup at low memory: a
@@ -52,7 +52,7 @@ mirror of this document. `tools/lexicon/format/encode.ts` is the writer.
 | field         | type      | value / meaning                          |
 |---------------|-----------|------------------------------------------|
 | magic         | u8[4]     | `4D 42 4C 58` = ASCII `"MBLX"`           |
-| version       | u32       | `8`                                      |
+| version       | u32       | `9`                                      |
 | langLen       | u8        | byte length of `lang`                    |
 | lang          | u8[langLen] | UTF-8 language tag (`"pt-BR"`, `"en"`)  |
 | variantScheme | u8        | `VariantScheme`                          |
@@ -213,7 +213,7 @@ A reader may verify the trailer as an integrity/truncation check.
 
 ## Lookup algorithm (reference)
 
-1. Verify header magic and `version == 8`; read metadata.
+1. Verify header magic and `version == 9`; read metadata.
 2. Load the offset tables (sections 3–4) and keep `entriesBase` and the two
    pools addressable.
 3. `lookup(form)`: UTF-8-encode `form`; binary-search `formOffsets`/`formBlob`
@@ -248,7 +248,10 @@ three clitic classes, `subordinators`, article definiteness, `temporalNouns`,
 `purposeMarkers`, `durationMarkers`, `interrogativeAdverbs`), the rhetorical
 lexicon (`subordinatorSenses`, `discourseMarkers`), the entity head-noun
 lists (`personHeadNouns`, `animalHeadNouns`, `organizationHeadNouns`,
-`personTitles`) and `objectPredicativeVerbs`. The binary
+`personTitles`) and `objectPredicativeVerbs`; v9 added `verbClasses`
+(Aktionsart), `fragmentParticles`, `focusParticles`, `monthNames`, and merged
+the shared-form tenses' person codes (I1s/I3s -> I13s — the ambiguity is now
+in the data, not papered over by gates). The binary
 layout is unchanged since v1, but the schema is
 part of the reader contract — an engine handed an older dict would read
 `undefined` where it expects those lists — so the version gates it.

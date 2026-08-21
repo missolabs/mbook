@@ -261,7 +261,23 @@ export type SyntaxData = {
   // Verbs whose postnominal adjective predicates the OBJECT (`achou a casa
   // VAZIA`, `left the door OPEN`).
   objectPredicativeVerbs: string[]
+  // Aktionsart: the verb's lexical aspect class, refining the timeline
+  // (a state has no culmination, an achievement is instantaneous).
+  verbClasses: VerbClassHint[]
+  // Fragment particles: a verbless `NP + também/não` sentence copies the
+  // previous verb (`Eu também.`, `Daniela não.`).
+  fragmentParticles: string[]
+  // Focus particles associating with the constituent to their right
+  // (`ATÉ Rei chorou`, `only Daniela knew`).
+  focusParticles: string[]
+  // Month names, for the calendar anchors the timeline extracts.
+  monthNames: string[]
   verbFeats: VerbFeatMarks
+}
+
+export type VerbClassHint = {
+  lemma: string
+  class: "state" | "activity" | "achievement" | "accomplishment"
 }
 
 // Which sense a verb feat carries on the timeline, first declared prefix

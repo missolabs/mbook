@@ -328,6 +328,32 @@ export const EN_SYNTAX: SyntaxData = {
   animalHeadNouns: ["cat", "dog", "bird", "horse", "fish"],
   organizationHeadNouns: ["company", "firm", "band", "newspaper", "bank", "shop"],
   objectPredicativeVerbs: ["find", "leave", "make", "keep", "consider", "paint"],
+  verbClasses: [
+    { lemma: "be", class: "state" }, { lemma: "have", class: "state" },
+    { lemma: "know", class: "state" }, { lemma: "love", class: "state" },
+    { lemma: "hate", class: "state" }, { lemma: "fear", class: "state" },
+    { lemma: "want", class: "state" }, { lemma: "seem", class: "state" },
+    { lemma: "exist", class: "state" }, { lemma: "live", class: "state" },
+    { lemma: "run", class: "activity" }, { lemma: "walk", class: "activity" },
+    { lemma: "write", class: "activity" }, { lemma: "read", class: "activity" },
+    { lemma: "weep", class: "activity" }, { lemma: "work", class: "activity" },
+    { lemma: "swim", class: "activity" }, { lemma: "wait", class: "activity" },
+    { lemma: "watch", class: "activity" },
+    { lemma: "arrive", class: "achievement" }, { lemma: "die", class: "achievement" },
+    { lemma: "find", class: "achievement" }, { lemma: "notice", class: "achievement" },
+    { lemma: "realize", class: "achievement" }, { lemma: "discover", class: "achievement" },
+    { lemma: "fall", class: "achievement" }, { lemma: "vanish", class: "achievement" },
+    { lemma: "wake", class: "achievement" },
+    { lemma: "open", class: "accomplishment" }, { lemma: "close", class: "accomplishment" },
+    { lemma: "build", class: "accomplishment" }, { lemma: "destroy", class: "accomplishment" },
+    { lemma: "kill", class: "accomplishment" }, { lemma: "eat", class: "accomplishment" },
+  ],
+  fragmentParticles: ["too", "not", "neither"],
+  focusParticles: ["only", "even", "also", "just"],
+  monthNames: [
+    "january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december",
+  ],
   // AGID/Moby codes: PAST, 3SG and FIN are finite ("PAST" also prefixes
   // PASTPART — an accepted over-match, since a participle-only homograph with a
   // noun reading is vanishingly rare). The English infinitive is the bare base

@@ -121,7 +121,13 @@ CREATE TABLE timeline_events (
   token_idx INTEGER NOT NULL,
   lane TEXT NOT NULL,
   sense TEXT NOT NULL,
-  effect TEXT NOT NULL
+  effect TEXT NOT NULL,
+  aspect TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE timeline_anchors (
+  sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+  token_idx INTEGER NOT NULL,
+  value TEXT NOT NULL
 );
 CREATE TABLE timeline_edges (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -142,6 +148,12 @@ CREATE TABLE aliases (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
   slug TEXT NOT NULL,
   description TEXT NOT NULL
+);
+CREATE TABLE alias_mentions (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
+  token_idx INTEGER NOT NULL,
+  slug TEXT NOT NULL
 );
 CREATE TABLE turn_guesses (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -167,7 +179,7 @@ export function openLinguaStore(path: string): Result<LinguaStore, StoreError> {
   }
 }
 
-const VERSION = 6
+const VERSION = 7
 
 function migrate(db: Db): void {
   const version = currentVersion(db)
@@ -181,6 +193,8 @@ function migrate(db: Db): void {
 
   db.exec(`
 DROP TABLE IF EXISTS turn_guesses;
+DROP TABLE IF EXISTS alias_mentions;
+DROP TABLE IF EXISTS timeline_anchors;
 DROP TABLE IF EXISTS aliases;
 DROP TABLE IF EXISTS entities;
 DROP TABLE IF EXISTS timeline_edges;
@@ -233,7 +247,7 @@ function store(db: Db): LinguaStore {
     "INSERT INTO discourse_links (book_id, from_sentence_id, from_token_idx, to_sentence_id, to_token_idx, kind, provenance) VALUES (?, ?, ?, ?, ?, ?, ?)",
   )
   const insertTimelineEvent = db.prepare(
-    "INSERT INTO timeline_events (sentence_id, token_idx, lane, sense, effect) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO timeline_events (sentence_id, token_idx, lane, sense, effect, aspect) VALUES (?, ?, ?, ?, ?, ?)",
   )
   const insertTimelineEdge = db.prepare(
     "INSERT INTO timeline_edges (book_id, from_sentence_id, from_token_idx, to_sentence_id, to_token_idx, kind, provenance) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -246,6 +260,12 @@ function store(db: Db): LinguaStore {
   )
   const insertTurnGuess = db.prepare(
     "INSERT INTO turn_guesses (book_id, paragraph_idx, slug) VALUES (?, ?, ?)",
+  )
+  const insertAnchor = db.prepare(
+    "INSERT INTO timeline_anchors (sentence_id, token_idx, value) VALUES (?, ?, ?)",
+  )
+  const insertAliasMention = db.prepare(
+    "INSERT INTO alias_mentions (book_id, sentence_id, token_idx, slug) VALUES (?, ?, ?, ?)",
   )
 
   const writeAll = db.transaction((record: BookRecord, rows: AnalysisRows) => {
@@ -280,6 +300,24 @@ function store(db: Db): LinguaStore {
         event.lane,
         event.sense,
         event.effect,
+        event.aspect,
+      )
+    }
+
+    for (const anchor of rows.timelineAnchors) {
+      insertAnchor.run(
+        sentenceIdOf(sentenceIds, anchor.paragraphIdx, anchor.sentenceIdx),
+        anchor.tokenIdx,
+        anchor.value,
+      )
+    }
+
+    for (const mention of rows.aliasMentions) {
+      insertAliasMention.run(
+        bookId,
+        sentenceIdOf(sentenceIds, mention.paragraphIdx, mention.sentenceIdx),
+        mention.tokenIdx,
+        mention.slug,
       )
     }
 

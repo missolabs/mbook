@@ -41,11 +41,22 @@ export type TimelineEvent = {
   lane: TimelineLane
   sense: string
   effect: TimelineEffect
+  // Aktionsart, from the declared verb classes ("" when unlisted): a state
+  // holds, an achievement is instantaneous — the refinement duration and
+  // iteration readings hang off.
+  aspect: string
 }
 
 export type TimelineEdgeKind = "before" | "meets" | "during" | "overlaps"
 
-export type TimelineProvenance = "narrative-advance" | "tense-anaphora" | "connective" | "prospection"
+export type TimelineProvenance =
+  | "narrative-advance"
+  | "tense-anaphora"
+  | "connective"
+  | "prospection"
+  // Sequence-of-tense inside a reported clause: the claim's tense is
+  // RELATIVE to the saying (`disse que viria` — the coming after the saying).
+  | "reported-tense"
 
 // `before(a, b)`: a happens before b. `meets(a, b)`: a ends where b begins.
 // `during(a, b)`: a happens inside the span of b.
@@ -58,9 +69,19 @@ export type TimelineEdge = {
   provenance: TimelineProvenance
 }
 
+// An absolute anchor the calendar rules extracted: a year-shaped numeral, a
+// declared month name, or the age idiom (`aos dezessete anos`). It pins the
+// sentence's narrative events to fixed time.
+export type TimelineAnchor = {
+  sentence: number
+  token: number
+  value: string
+}
+
 export type Timeline = {
   events: readonly TimelineEvent[]
   edges: readonly TimelineEdge[]
+  anchors: readonly TimelineAnchor[]
 }
 
 export type TimelineInput = {
@@ -107,8 +128,12 @@ export function buildTimeline(input: TimelineInput): Timeline {
       let { lane, sense, effect } = admitted.value
 
       // A verb inside a non-factive attitude's complement is REPORTED, not
-      // asserted: `disse que Daniela fugiu` is Rei's claim.
-      switch (lane === "narrative" && reported.some((r) => chunk.head >= r.from && chunk.head < r.to)) {
+      // asserted: `disse que Daniela fugiu` is Rei's claim — and so is the
+      // conditional `disse que viria`, which would otherwise land on
+      // irrealis before this override could see it.
+      const reportable = lane === "narrative" || lane === "irrealis" || lane === "offline"
+
+      switch (reportable && reported.some((r) => chunk.head >= r.from && chunk.head < r.to)) {
         case true:
           lane = "reported"
           break
@@ -130,7 +155,7 @@ export function buildTimeline(input: TimelineInput): Timeline {
 
       const at: Anchor = { sentence: si, token: chunk.head }
 
-      events.push({ sentence: si, token: chunk.head, lane, sense, effect })
+      events.push({ sentence: si, token: chunk.head, lane, sense, effect, aspect: aspectOf(sentence, chunk.head, input.syntax) })
 
       switch (lane) {
         case "narrative":
@@ -143,8 +168,44 @@ export function buildTimeline(input: TimelineInput): Timeline {
           continue
         case "negated":
           continue
-        case "reported":
-          continue
+        case "reported": {
+          // Sequence-of-tense: the claim's tense orders it RELATIVE to the
+          // saying — `disse que fugiu` before the saying, `disse que viria`
+          // after it, `disse que estava` around it.
+          const region = reported.find((r) => chunk.head >= r.from && chunk.head < r.to)
+
+          switch (region === undefined) {
+            case true:
+              continue
+            case false:
+              break
+          }
+
+          const matrix: Anchor = { sentence: si, token: region!.matrix }
+
+          switch (sense) {
+            case "past":
+              edges.push(edge("before", at, matrix, "reported-tense"))
+              continue
+            case "pluperfect":
+              edges.push(edge("before", at, matrix, "reported-tense"))
+              continue
+            case "conditional":
+              edges.push(edge("before", matrix, at, "reported-tense"))
+              continue
+            case "future":
+              edges.push(edge("before", matrix, at, "reported-tense"))
+              continue
+            case "imperfect":
+              edges.push(edge("during", matrix, at, "reported-tense"))
+              continue
+            case "present":
+              edges.push(edge("during", matrix, at, "reported-tense"))
+              continue
+            default:
+              continue
+          }
+        }
       }
 
       switch (embedded.has(chunk.head)) {
@@ -232,7 +293,76 @@ export function buildTimeline(input: TimelineInput): Timeline {
     }
   })
 
-  return { events, edges }
+  return { events, edges, anchors: calendarAnchors(input) }
+}
+
+function aspectOf(sentence: Sentence, head: number, syntax: SyntaxData): string {
+  const hit = syntax.verbClasses.find((v) => v.lemma === lemmaOf(sentence, head))
+
+  switch (hit === undefined) {
+    case true:
+      return ""
+    case false:
+      return hit!.class
+  }
+}
+
+// The calendar rules, all surface-decidable: a year-shaped numeral
+// (1000-2999), a declared month name, and the age idiom (`aos NUM anos` /
+// `at NUM`). Anchors carry their surface value; joining them to events is
+// the consumer's join on the sentence.
+function calendarAnchors(input: TimelineInput): readonly TimelineAnchor[] {
+  const out: TimelineAnchor[] = []
+
+  input.sentences.forEach((sentence, si) => {
+    sentence.tokens.forEach((token, ti) => {
+      switch (token.role) {
+        case "punctuation":
+          return
+        case "content":
+          break
+      }
+
+      const text = token.tagged.token.text
+
+      switch (/^[12]\d{3}$/.test(text)) {
+        case true:
+          out.push({ sentence: si, token: ti, value: `year:${text}` })
+          return
+        case false:
+          break
+      }
+
+      switch (input.syntax.monthNames.includes(text.toLowerCase())) {
+        case true:
+          out.push({ sentence: si, token: ti, value: `month:${text.toLowerCase()}` })
+          return
+        case false:
+          break
+      }
+
+      // The age idiom: a numeral followed by the year-noun (`aos dezessete
+      // anos`, `at seventeen`). Spelled-out numerals tag NUM through the
+      // dictionary.
+      const next = sentence.tokens[ti + 1]
+
+      const age =
+        token.tagged.pos === "NUM" &&
+        next !== undefined &&
+        next.role === "content" &&
+        next.tagged.lemma === "ano"
+
+      switch (age) {
+        case true:
+          out.push({ sentence: si, token: ti, value: `age:${text}` })
+          return
+        case false:
+          return
+      }
+    })
+  })
+
+  return out
 }
 
 function edge(kind: TimelineEdgeKind, from: Anchor, to: Anchor, provenance: TimelineProvenance): TimelineEdge {
@@ -513,7 +643,7 @@ function addConnectiveEdge(
   }
 }
 
-type Region = { from: number; to: number }
+type Region = { from: number; to: number; matrix: number }
 
 // The reported spans of a sentence: each complement-of whose matrix is a
 // verb of saying or a NON-factive attitude verb scopes its clause — forward
@@ -546,10 +676,10 @@ function reportedRegions(sentence: Sentence, syntax: SyntaxData): readonly Regio
 
     switch (r.dependent < r.head) {
       case true:
-        out.push({ from: r.dependent, to: r.head })
+        out.push({ from: r.dependent, to: r.head, matrix: r.head })
         continue
       case false:
-        out.push({ from: r.dependent, to: sentence.tokens.length })
+        out.push({ from: r.dependent, to: sentence.tokens.length, matrix: r.head })
         continue
     }
   }

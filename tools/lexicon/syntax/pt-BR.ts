@@ -397,6 +397,39 @@ export const PT_BR_SYNTAX: SyntaxData = {
   animalHeadNouns: ["gato", "gata", "cão", "cadela", "cachorro", "cachorra", "pássaro", "cavalo", "peixe"],
   organizationHeadNouns: ["empresa", "companhia", "banda", "jornal", "editora", "banco", "loja"],
   objectPredicativeVerbs: ["achar", "deixar", "tornar", "considerar", "manter", "julgar"],
+  // Aktionsart, the literary core: states hold, activities extend,
+  // achievements are instantaneous, accomplishments culminate.
+  verbClasses: [
+    { lemma: "ser", class: "state" }, { lemma: "estar", class: "state" },
+    { lemma: "ter", class: "state" }, { lemma: "haver", class: "state" },
+    { lemma: "saber", class: "state" }, { lemma: "conhecer", class: "state" },
+    { lemma: "amar", class: "state" }, { lemma: "odiar", class: "state" },
+    { lemma: "temer", class: "state" }, { lemma: "querer", class: "state" },
+    { lemma: "morar", class: "state" }, { lemma: "existir", class: "state" },
+    { lemma: "parecer", class: "state" }, { lemma: "gostar", class: "state" },
+    { lemma: "correr", class: "activity" }, { lemma: "andar", class: "activity" },
+    { lemma: "caminhar", class: "activity" }, { lemma: "escrever", class: "activity" },
+    { lemma: "ler", class: "activity" }, { lemma: "chorar", class: "activity" },
+    { lemma: "trabalhar", class: "activity" }, { lemma: "nadar", class: "activity" },
+    { lemma: "esperar", class: "activity" }, { lemma: "olhar", class: "activity" },
+    { lemma: "chegar", class: "achievement" }, { lemma: "morrer", class: "achievement" },
+    { lemma: "encontrar", class: "achievement" }, { lemma: "achar", class: "achievement" },
+    { lemma: "perceber", class: "achievement" }, { lemma: "notar", class: "achievement" },
+    { lemma: "descobrir", class: "achievement" }, { lemma: "cair", class: "achievement" },
+    { lemma: "sumir", class: "achievement" }, { lemma: "desaparecer", class: "achievement" },
+    { lemma: "nascer", class: "achievement" }, { lemma: "acordar", class: "achievement" },
+    { lemma: "abrir", class: "accomplishment" }, { lemma: "fechar", class: "accomplishment" },
+    { lemma: "construir", class: "accomplishment" }, { lemma: "destruir", class: "accomplishment" },
+    { lemma: "matar", class: "accomplishment" }, { lemma: "comer", class: "accomplishment" },
+  ],
+  fragmentParticles: ["também", "sim", "não", "tampouco"],
+  // `até` doubles as directional — the binder only reads it as focus when no
+  // verb precedes it in the clause.
+  focusParticles: ["só", "apenas", "até", "também", "nem", "mesmo"],
+  monthNames: [
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
+    "agosto", "setembro", "outubro", "novembro", "dezembro",
+  ],
   // DELAF tense letters: P/I/J/F/Q presente..mais-que-perfeito, C condicional,
   // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio;
   // G gerúndio (the progressive/manner chains: `estava correndo`, `saiu correndo`).

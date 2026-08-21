@@ -174,7 +174,16 @@ export type SyntaxData = {
   animalHeadNouns: string[]
   organizationHeadNouns: string[]
   objectPredicativeVerbs: string[]
+  verbClasses: VerbClassHint[]
+  fragmentParticles: string[]
+  focusParticles: string[]
+  monthNames: string[]
   verbFeats: VerbFeatMarks
+}
+
+export type VerbClassHint = {
+  lemma: string
+  class: "state" | "activity" | "achievement" | "accomplishment"
 }
 
 export type VariantScheme = "none" | "us-uk"

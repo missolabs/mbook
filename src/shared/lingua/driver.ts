@@ -113,6 +113,7 @@ export type BookAnalysis = {
   // detetive` / `o detetive Rei`) — the alias registry definite descriptions
   // resolve through.
   aliases: readonly CharacterAlias[]
+  aliasMentions: readonly AliasMention[]
   // Unattributed dialogue turns guessed by ALTERNATION: in a run between
   // exactly two attributed speakers, consecutive turns alternate.
   turnGuesses: readonly TurnGuess[]
@@ -121,6 +122,17 @@ export type BookAnalysis = {
 export type CharacterAlias = {
   slug: string
   description: string
+}
+
+// A definite description RESOLVED through the alias registry: once the text
+// says `Rei, o detetive`, every later `o detetive` is Rei — epithet
+// coreference grounded entirely in the book's own words. Ambiguous
+// descriptions (two characters sharing one) resolve no one.
+export type AliasMention = {
+  paragraph: number
+  sentence: number
+  token: number
+  slug: string
 }
 
 export type TurnGuess = {
@@ -160,6 +172,8 @@ export function analyzeBook(
     analyzeSlot(block, index, lines, spans, starts, chapters, lexicon.value, language),
   )
 
+  const aliases = collectAliases(paragraphs, cast)
+
   return ok({
     language,
     cast,
@@ -169,9 +183,94 @@ export function analyzeBook(
     bookLinks: crossParagraphLinks(paragraphs, lexicon.value),
     entities: nameEntities(paragraphs, cast, lexicon.value),
     timelineEdges: stitchTimelines(paragraphs),
-    aliases: collectAliases(paragraphs, cast),
+    aliases,
+    aliasMentions: resolveAliasMentions(paragraphs, aliases, lexicon.value),
     turnGuesses: guessTurns(paragraphs, cast),
   })
+}
+
+// Later definite descriptions resolve through the registry: a definite NP
+// whose head lemma is a UNIQUELY-owned alias points at its character — the
+// defining appositive itself is excluded.
+function resolveAliasMentions(
+  paragraphs: readonly ParagraphSlot[],
+  aliases: readonly CharacterAlias[],
+  lexicon: Lexicon,
+): readonly AliasMention[] {
+  const owners = new Map<string, string | null>()
+
+  for (const alias of aliases) {
+    const existing = owners.get(alias.description)
+
+    switch (existing === undefined) {
+      case true:
+        owners.set(alias.description, alias.slug)
+        break
+      case false:
+        switch (existing === alias.slug) {
+          case true:
+            break
+          case false:
+            owners.set(alias.description, null)
+            break
+        }
+        break
+    }
+  }
+
+  const out: AliasMention[] = []
+
+  for (const slot of paragraphs) {
+    slot.analysis.sentences.forEach((sentence, si) => {
+      for (const chunk of sentence.chunks) {
+        switch (chunk.kind === "NP") {
+          case false:
+            continue
+          case true:
+            break
+        }
+
+        const opener = sentence.tokens[chunk.from]!
+        const head = sentence.tokens[chunk.head]!
+
+        const definite =
+          opener.role === "content" &&
+          head.role === "content" &&
+          head.tagged.pos === "NOUN" &&
+          lexicon.syntax.definiteArticles.includes(opener.tagged.token.text.toLowerCase())
+
+        switch (definite) {
+          case false:
+            continue
+          case true:
+            break
+        }
+
+        const slug = owners.get((head as { tagged: { lemma: string } }).tagged.lemma)
+
+        switch (slug === undefined || slug === null) {
+          case true:
+            continue
+          case false:
+            break
+        }
+
+        const defining = sentence.relations.some(
+          (r) => r.kind === "appositive-of" && r.dependent === chunk.head,
+        )
+
+        switch (defining) {
+          case true:
+            continue
+          case false:
+            out.push({ paragraph: slot.index, sentence: si, token: chunk.head, slug: slug! })
+            continue
+        }
+      }
+    })
+  }
+
+  return out
 }
 
 // Appositives whose NAME side is a cast member register the description as

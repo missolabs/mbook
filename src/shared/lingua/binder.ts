@@ -62,6 +62,7 @@ export type RelationKind =
   | "role-of" // the como/as role predicate (trabalhava como DETETIVE)
   | "purpose-of" // a purpose infinitive bound to its matrix (saiu para COMPRAR pão)
   | "duration-of" // a duration adjunct (POR DOIS ANOS), distinct from point-in-time temporal-of
+  | "focus-of" // a focus particle bound to its associate (ATÉ Rei chorou, ONLY Daniela knew)
 
 export type RelationProvenance = "heuristic" | "pinned"
 
@@ -143,6 +144,8 @@ export function bind(input: RelationInput): readonly Relation[] {
   addDurationOpeners(relations, input)
   addWhAdjuncts(relations, input)
   addAdverbAttachment(relations, input)
+  addFocusParticles(relations, input)
+  addGappedFragments(relations, input)
   expandCoordination(relations, input)
 
   return applyPolarity(relations, input)
@@ -2588,6 +2591,8 @@ function spreadsAcrossCoordination(kind: RelationKind): boolean {
       return false
     case "duration-of":
       return false
+    case "focus-of":
+      return false
   }
 }
 
@@ -3744,6 +3749,158 @@ function addWhAdjuncts(relations: Relation[], input: RelationInput): void {
       relations.push(relation("advmod-of", first, vp!.head, "heuristic"))
       return
   }
+}
+
+// A focus particle associates with the constituent beside it: the NP after
+// it (`ATÉ Rei chorou`, `only DANIELA knew`), the NP directly before it
+// (`Daniela TAMBÉM chorou`), or failing both the next verb. Directional
+// homographs stand down: an `até` opening a PP is a preposition, and any
+// particle after the clause's verb is scope this rule does not guess.
+function addFocusParticles(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    const lower = tokenLower(token)
+
+    switch (lower !== null && input.syntax.focusParticles.includes(lower!)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const opensPp = input.chunks.some((c) => c.kind === "PP" && c.from === ti)
+    const verbBefore = input.chunks.some((c) => c.kind === "VP" && c.to <= ti)
+
+    switch (opensPp || verbBefore) {
+      case true:
+        return
+      case false:
+        break
+    }
+
+    const after = input.chunks.find((c) => c.kind === "NP" && c.from === ti + 1)
+
+    switch (after === undefined) {
+      case false:
+        relations.push(relation("focus-of", ti, after!.head, "heuristic"))
+        return
+      case true:
+        break
+    }
+
+    const before = input.chunks.find((c) => c.kind === "NP" && c.to === ti)
+
+    switch (before === undefined) {
+      case false:
+        relations.push(relation("focus-of", ti, before!.head, "heuristic"))
+        return
+      case true:
+        break
+    }
+
+    const vp = input.chunks.find((c) => c.kind === "VP" && c.from > ti)
+
+    switch (vp === undefined) {
+      case true:
+        return
+      case false:
+        relations.push(relation("focus-of", ti, vp!.head, "heuristic"))
+        return
+    }
+  })
+}
+
+// Gapping, the one shape prose uses: `Rei comprou pão; Daniela, vinho.` — a
+// full transitive clause, a separator, then exactly NP , NP against the
+// terminal. The remnants take the SAME verb token: a second subject and a
+// second object on it, the way coordination already doubles roles.
+function addGappedFragments(relations: Relation[], input: RelationInput): void {
+  const vps = input.chunks.filter((c) => c.kind === "VP")
+
+  switch (vps.length === 1) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const verb = vps[0]!.head
+
+  const subject = relations.find((r) => r.kind === "subject-of" && r.head === verb)
+  const object = relations.find((r) => r.kind === "object-of" && r.head === verb)
+
+  switch (subject === undefined || object === undefined) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const objectChunk = input.chunks.find((c) => c.kind === "NP" && c.head === object!.dependent)
+
+  switch (objectChunk === undefined) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const trailing = input.chunks.filter((c) => c.kind === "NP" && c.from >= objectChunk!.to)
+
+  switch (trailing.length === 2) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const [a, b] = trailing
+
+  const separated =
+    singlePunctuation(input, objectChunk!.to, a!.from, [";", ","]) &&
+    singlePunctuation(input, a!.to, b!.from, [","]) &&
+    onlyTerminalAfter(input, b!.to)
+
+  switch (separated) {
+    case false:
+      return
+    case true:
+      relations.push(relation("subject-of", a!.head, verb, "heuristic"))
+      relations.push(relation("object-of", b!.head, verb, "heuristic"))
+      return
+  }
+}
+
+function singlePunctuation(input: RelationInput, from: number, to: number, marks: readonly string[]): boolean {
+  switch (to - from === 1) {
+    case false:
+      return false
+    case true:
+      break
+  }
+
+  const token = input.tokens[from]!
+
+  switch (token.role) {
+    case "content":
+      return false
+    case "punctuation":
+      return marks.includes(token.token.text)
+  }
+}
+
+function onlyTerminalAfter(input: RelationInput, from: number): boolean {
+  for (let at = from; at < input.tokens.length; at++) {
+    const token = input.tokens[at]!
+
+    switch (token.role) {
+      case "content":
+        return false
+      case "punctuation":
+        continue
+    }
+  }
+
+  return true
 }
 
 // The polarity pass: a declared negator riding a VP (inside it before the

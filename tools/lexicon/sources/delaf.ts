@@ -144,8 +144,25 @@ function parseLine(line: string): LexEntry[] {
       return withModernTwins([{ form, lemma, pos, feat: "", variant: "both" }])
     case false: {
       const codes = codesRaw.split(":").filter((c) => c.length > 0)
-      return withModernTwins(codes.map((feat) => ({ form, lemma, pos, feat, variant: "both" })))
+      return withModernTwins(codes.map((feat) => ({ form, lemma, pos, feat: mergePerson(feat), variant: "both" })))
     }
+  }
+}
+
+// The shared-form tenses (imperfeito I, mais-que-perfeito Q, condicional C,
+// subjuntivos S/T/U, infinitivo pessoal W) do not distinguish 1st from 3rd
+// singular — `esperava` is both — yet this DELAF labels them with ONE person,
+// usually 1s and sometimes both on separate lines. The merge represents the
+// ambiguity honestly: I1s and I3s both become I13s (the duplicate collapses
+// at encode), so person gates read AMBIGUITY instead of an artifact.
+function mergePerson(feat: string): string {
+  const shared = /^([IQCSTUW])[13](s)$/.exec(feat)
+
+  switch (shared === null) {
+    case true:
+      return feat
+    case false:
+      return `${shared![1]}13${shared![2]}`
   }
 }
 

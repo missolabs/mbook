@@ -43,6 +43,9 @@ export type DiscourseLinkKind =
   // its predecessor, on `portanto`/`so` follows from it.
   | "contrast"
   | "consequence"
+  // A verbless polar fragment copies the previous verb: `Eu também.`,
+  // `Daniela não.` — the NP does (or does not do) what was just done.
+  | "fragment"
 
 export type DiscourseProvenance = "discourse"
 
@@ -65,10 +68,16 @@ export function linkDiscourse(input: DiscourseInput): readonly DiscourseLink[] {
   const links: DiscourseLink[] = []
 
   input.sentences.forEach((sentence, si) => {
+    // The narrator claims first: an {Eu}-scoped person-ambiguous verb (I13s)
+    // is the narrator's, and only the leftovers enter 3rd-person continuity.
+    linkFirstPerson(links, input, si)
+
     // Continuity claims one verb at a time: a sentence where SEVERAL verbs
     // lack subjects is an impersonal or infinitival construction (`sair do
     // trabalho significava entrar...`), not an elided subject.
-    const continuity = subjectlessThirdVerbs(sentence, input.syntax)
+    const continuity = subjectlessThirdVerbs(sentence, input.syntax).filter(
+      (verb) => hasLink(links, "elided-subject", si, verb) === false,
+    )
     const eligible = continuity.length === 1 && subjectlessVpCount(sentence) === 1
 
     for (const verb of eligible ? continuity : []) {
@@ -110,8 +119,8 @@ export function linkDiscourse(input: DiscourseInput): readonly DiscourseLink[] {
     }
 
     linkAnaphors(links, input, si)
-    linkFirstPerson(links, input, si)
     linkRhetorical(links, input, si)
+    linkFragments(links, input, si)
   })
 
   linkCoreference(links, input)
@@ -168,6 +177,76 @@ function linkRhetorical(links: DiscourseLink[], input: DiscourseInput, si: numbe
         })
         return
     }
+  }
+}
+
+// A verbless sentence of `NP + também/sim/não` inherits the previous
+// sentence's verb: `Rei chorou. Eu também.` — the fragment's NP links to the
+// verb it silently repeats. Whether it AFFIRMS or DENIES is read off the
+// particle by consumers.
+function linkFragments(links: DiscourseLink[], input: DiscourseInput, si: number): void {
+  switch (si === 0) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const sentence = input.sentences[si]!
+
+  const verbless = sentence.chunks.every((c) => c.kind !== "VP")
+  const np = sentence.chunks.find((c) => c.kind === "NP")
+
+  switch (verbless && np !== undefined) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const particle = sentence.tokens.some((t) => {
+    switch (t.role) {
+      case "punctuation":
+        return false
+      case "content":
+        return input.syntax.fragmentParticles.includes(t.tagged.token.text.toLowerCase())
+    }
+  })
+
+  switch (particle) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const previous = input.sentences[si - 1]!
+
+  let verb: Optional<number> = { kind: "none" }
+
+  for (const c of previous.chunks) {
+    switch (c.kind === "VP") {
+      case true:
+        verb = { kind: "some", value: c.head }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  switch (verb.kind) {
+    case "none":
+      return
+    case "some":
+      links.push({
+        kind: "fragment",
+        fromSentence: si,
+        fromToken: np!.head,
+        toSentence: si - 1,
+        toToken: verb.value,
+        provenance: "discourse",
+      })
+      return
   }
 }
 
@@ -515,11 +594,12 @@ function linkFirstPerson(links: DiscourseLink[], input: DiscourseInput, si: numb
         continue
     }
 
+    // `includes("1")` alone: the merged I13s feats are person-AMBIGUOUS, and
+    // an {Eu} mention in scope resolves them to the narrator — the pass runs
+    // before 3rd-person continuity exactly so this claim wins.
     const feat = featAt(sentence, chunk.head)
     const firstPerson =
-      input.syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p)) &&
-      feat.includes("1") &&
-      feat.includes("3") === false
+      input.syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p)) && feat.includes("1")
 
     switch (firstPerson) {
       case false:
@@ -906,9 +986,7 @@ export function linkAcrossParagraphs(
 
       const feat = featAt(sentence, chunk.head)
       const firstPerson =
-        curr.syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p)) &&
-        feat.includes("1") &&
-        feat.includes("3") === false
+        curr.syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p)) && feat.includes("1")
 
       const subjected = sentence.relations.some((r) => r.kind === "subject-of" && r.head === chunk.head)
 
@@ -1314,6 +1392,8 @@ function claimsObject(relation: Relation, head: number): boolean {
     case "purpose-of":
       return false
     case "duration-of":
+      return false
+    case "focus-of":
       return false
   }
 }
