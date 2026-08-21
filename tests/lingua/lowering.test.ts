@@ -64,10 +64,10 @@ const BOOK = [
 describe("BookAnalysis -> relational rows", () => {
   const rows = analysisToRows(analyze(BOOK))
 
-  it("maps the cast to character rows with slug and canonical name", () => {
+  it("maps the cast to character rows with slug, canonical name and gender", () => {
     expect(rows.characters).toEqual([
-      { slug: "joao", canonical: "João" },
-      { slug: "maria", canonical: "Maria" },
+      { slug: "joao", canonical: "João", gender: "m" },
+      { slug: "maria", canonical: "Maria", gender: "f" },
     ])
   })
 

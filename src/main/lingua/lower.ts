@@ -12,7 +12,7 @@ import type { Binding, GlyphSpan } from "../../shared/book/glyphs"
 import type { AnalyzedToken } from "../../shared/lingua/tagger"
 import type { Optional } from "../../shared/optional"
 
-export type CharacterRow = { slug: string; canonical: string }
+export type CharacterRow = { slug: string; canonical: string; gender: string }
 
 export type TokenRow = {
   idx: number
@@ -157,7 +157,7 @@ export type AnalysisRows = {
 }
 
 export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
-  const characters = analysis.cast.characters.map((c) => ({ slug: c.slug, canonical: c.name }))
+  const characters = analysis.castMembers.map((m) => ({ slug: m.slug, canonical: m.name, gender: m.gender }))
 
   const sentences: SentenceRow[] = []
   const discourseLinks: DiscourseLinkRow[] = []

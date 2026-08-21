@@ -92,6 +92,7 @@ async function runOnce(path: string, content: string): Promise<void> {
     case false:
       console.log(`[mbook] analysis skipped for ${path}: ${analysis.error.kind}`)
       emitEvent("evt:diagnostics", { path, items: [] })
+      emitEvent("evt:cast", { path, members: [] })
       return
     case true:
       break
@@ -106,6 +107,15 @@ async function runOnce(path: string, content: string): Promise<void> {
       from: d.charFrom,
       to: d.charTo,
       detail: d.detail,
+    })),
+  })
+
+  emitEvent("evt:cast", {
+    path,
+    members: analysis.value.castMembers.map((m) => ({
+      slug: m.slug,
+      name: m.name,
+      gender: m.gender,
     })),
   })
 

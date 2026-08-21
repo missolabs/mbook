@@ -33,6 +33,7 @@ import type { TimelineEdgeKind, TimelineEvent, TimelineProvenance } from "./time
 import { readLanguage } from "./language"
 import type { Language } from "./language"
 import type { Lexicon } from "./lexicon"
+import type { Entry, Pos } from "./model"
 
 // Where a sentence sits in the book: its enclosing chapter (1-based
 // auto-number plus title, none before the first `##` heading) and the 1-based
@@ -100,9 +101,23 @@ export type NamedEntity = {
   mentions: number
 }
 
+// Each cast member's grammatical gender, decided by ORDERED evidence:
+//   1. authored — a display group bound to the member whose text leads with a
+//      gendered closed-class word (`{Ela}[Daniela]`, `{a moça}[Daniela]`) is
+//      the author speaking; majority of such votes wins, a tie stays unknown;
+//   2. dictionary — the name's own PROPN entry (Daniela fs, Rei ms), first
+//      word for compound names, with a common-noun reading as fallback
+//      (`Narrador` ms);
+//   3. unknown — a name the book never gendered and the dictionary never met
+//      (Hellmanns) ranks neutrally everywhere downstream.
+export type CastGender = "f" | "m" | "unknown"
+
+export type CastMember = { slug: string; name: string; gender: CastGender }
+
 export type BookAnalysis = {
   language: Language
   cast: Cast
+  castMembers: readonly CastMember[]
   paragraphs: readonly ParagraphSlot[]
   spans: readonly GlyphSpan[]
   unresolved: readonly string[]
@@ -204,6 +219,7 @@ export function analyzeBook(
   return ok({
     language,
     cast,
+    castMembers: genderCast(cast, spans, lexicon.value),
     paragraphs,
     spans,
     unresolved: unresolvedNames(spans),
@@ -790,6 +806,189 @@ function lastPerfective(events: readonly TimelineEvent[]): Optional<TimelineEven
   }
 
   return best
+}
+
+// ─── cast gender ─────────────────────────────────────────────────────────────
+function genderCast(cast: Cast, spans: readonly GlyphSpan[], lexicon: Lexicon): readonly CastMember[] {
+  return cast.characters.map((character) => ({
+    slug: character.slug,
+    name: character.name,
+    gender: memberGender(character.slug, character.name, spans, lexicon),
+  }))
+}
+
+function memberGender(slug: string, name: string, spans: readonly GlyphSpan[], lexicon: Lexicon): CastGender {
+  const authored = authoredGender(slug, spans, lexicon)
+
+  switch (authored) {
+    case "f":
+    case "m":
+      return authored
+    case "unknown":
+      break
+  }
+
+  return dictionaryGender(name, lexicon)
+}
+
+// Display groups bound to this member vote with their leading word:
+// `{Ela}[Daniela]` and `{a moça}[Daniela]` each say feminine. A name-shaped
+// display (`@[Rei]` writes the name itself) votes nothing.
+function authoredGender(slug: string, spans: readonly GlyphSpan[], lexicon: Lexicon): CastGender {
+  let f = 0
+  let m = 0
+
+  for (const span of spans) {
+    const binding = span.binding
+
+    switch (binding.kind) {
+      case "resolved":
+        break
+      case "unresolved":
+      case "unknown":
+        continue
+    }
+
+    switch (binding.slug === slug) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const lead = span.text.trim().split(/\s+/)[0] ?? ""
+
+    switch (closedClassGender(lead, lexicon)) {
+      case "f":
+        f += 1
+        continue
+      case "m":
+        m += 1
+        continue
+      case "unknown":
+        continue
+    }
+  }
+
+  return majority(f, m)
+}
+
+function majority(f: number, m: number): CastGender {
+  switch (f > m) {
+    case true:
+      return "f"
+    case false:
+      break
+  }
+
+  switch (m > f) {
+    case true:
+      return "m"
+    case false:
+      return "unknown"
+  }
+}
+
+// Only a pronoun or article carries authored gender; the gender letter sits
+// anywhere in the feat (article `a` fs, but pronoun `ela` N3fs — the case
+// marker leads), so feats are scanned, not indexed. And only a UNANIMOUS
+// gender counts: `eu` lists N1fs and N1ms both, so first person abstains.
+function closedClassGender(word: string, lexicon: Lexicon): CastGender {
+  let f = 0
+  let m = 0
+
+  for (const entry of lexicon.lookup(word.toLowerCase(), { kind: "all" })) {
+    switch (entry.pos) {
+      case "PRON":
+      case "DET":
+        break
+      default:
+        continue
+    }
+
+    for (const mark of entry.feat) {
+      switch (mark) {
+        case "f":
+          f += 1
+          continue
+        case "m":
+          m += 1
+          continue
+        default:
+          continue
+      }
+    }
+  }
+
+  switch (f > 0 && m === 0) {
+    case true:
+      return "f"
+    case false:
+      break
+  }
+
+  switch (m > 0 && f === 0) {
+    case true:
+      return "m"
+    case false:
+      return "unknown"
+  }
+}
+
+// The dictionary's own word on the name: a PROPN entry first, a common-noun
+// reading second. Conflicting entries cancel — only a unanimous gender counts.
+function dictionaryGender(name: string, lexicon: Lexicon): CastGender {
+  const first = name.split(/\s+/)[0] ?? name
+  const proper = genderAmong(lexicon.lookup(first, { kind: "all" }), "PROPN")
+
+  switch (proper) {
+    case "f":
+    case "m":
+      return proper
+    case "unknown":
+      break
+  }
+
+  return genderAmong(lexicon.lookup(first.toLowerCase(), { kind: "all" }), "NOUN")
+}
+
+function genderAmong(entries: readonly Entry[], pos: Pos): CastGender {
+  let f = 0
+  let m = 0
+
+  for (const entry of entries) {
+    switch (entry.pos === pos) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    switch (entry.feat[0]) {
+      case "f":
+        f += 1
+        continue
+      case "m":
+        m += 1
+        continue
+      default:
+        continue
+    }
+  }
+
+  switch (f > 0 && m === 0) {
+    case true:
+      return "f"
+    case false:
+      break
+  }
+
+  switch (m > 0 && f === 0) {
+    case true:
+      return "m"
+    case false:
+      return "unknown"
+  }
 }
 
 // Every proper-noun NP outside the cast, aggregated by surface name; each

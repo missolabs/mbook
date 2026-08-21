@@ -20,6 +20,7 @@ import { Navigator } from "./navigator"
 import { DocSession } from "./doc-session"
 import { PageTracker } from "./page-tracker"
 import { createEditor, programmatic } from "./editor/editor"
+import { setCastGenders } from "./editor/cast-rank"
 import { setDiagnostics } from "./editor/diagnostics"
 import type { DocReflow } from "./editor/editor"
 import { setPageJoints } from "./editor/page-breaks"
@@ -535,6 +536,10 @@ switch (app) {
     window.mbook.on("evt:diagnostics", (payload) => {
       view.dispatch({ effects: setDiagnostics.of(payload.items) })
       statusModel.setNotes(payload.items.length)
+    })
+
+    window.mbook.on("evt:cast", (payload) => {
+      setCastGenders(payload.members)
     })
 
     window.mbook.on("evt:menu", (payload) => {

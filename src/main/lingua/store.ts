@@ -55,7 +55,8 @@ CREATE TABLE books (
 CREATE TABLE characters (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
   slug TEXT NOT NULL,
-  canonical TEXT NOT NULL
+  canonical TEXT NOT NULL,
+  gender TEXT NOT NULL
 );
 CREATE TABLE sentences (
   id INTEGER PRIMARY KEY,
@@ -187,7 +188,7 @@ export function openLinguaStore(path: string): Result<LinguaStore, StoreError> {
   }
 }
 
-const VERSION = 8
+const VERSION = 9
 
 function migrate(db: Db): void {
   const version = currentVersion(db)
@@ -235,7 +236,7 @@ function store(db: Db): LinguaStore {
     "INSERT INTO books (path, language, content_hash, analyzed_at) VALUES (?, ?, ?, ?)",
   )
   const insertCharacter = db.prepare(
-    "INSERT INTO characters (book_id, slug, canonical) VALUES (?, ?, ?)",
+    "INSERT INTO characters (book_id, slug, canonical, gender) VALUES (?, ?, ?, ?)",
   )
   const insertSentence = db.prepare(
     "INSERT INTO sentences (book_id, paragraph_idx, idx, char_start, char_end, chapter_idx, chapter_title, line, col, attribution_kind, attribution_slug, sentence_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -288,7 +289,7 @@ function store(db: Db): LinguaStore {
     )
 
     for (const character of rows.characters) {
-      insertCharacter.run(bookId, character.slug, character.canonical)
+      insertCharacter.run(bookId, character.slug, character.canonical, character.gender)
     }
 
     const sentenceIds = new Map<string, number>()

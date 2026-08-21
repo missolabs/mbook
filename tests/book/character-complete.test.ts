@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test"
+import { afterEach, describe, it, expect } from "bun:test"
 
 import { EditorState } from "@codemirror/state"
 import type { TransactionSpec } from "@codemirror/state"
@@ -8,7 +8,8 @@ import type { Completion, CompletionResult } from "@codemirror/autocomplete"
 
 import { parseBookDoc } from "../../src/shared/book/parse"
 import { buildCast } from "../../src/shared/book/cast"
-import { characterCompletions, detectBinding, matchCharacters } from "../../src/renderer/editor/character-complete"
+import { characterCompletions, detectBinding, displayBefore, matchCharacters } from "../../src/renderer/editor/character-complete"
+import { displayGender, rankCharacters, setCastGenders, castGenders } from "../../src/renderer/editor/cast-rank"
 import { deriveCast } from "../../src/renderer/editor/doc-cast"
 
 const cast = buildCast(
@@ -278,5 +279,194 @@ describe("deriveCast — the live document's cast", () => {
     const state = EditorState.create({ doc: "Só prosa, sem elenco." })
 
     expect(deriveCast(state).characters).toEqual([])
+  })
+})
+
+// ─── ranking ─────────────────────────────────────────────────────────────────
+describe("displayBefore — reading the group being bound", () => {
+  function display(line: string): string {
+    return displayBefore(line, line.lastIndexOf("["))
+  }
+
+  it("reads the display text back from a `}[` opener", () => {
+    expect(display("Ela sorriu. {Ela}[")).toBe("Ela")
+
+    expect(display("{a moça}[")).toBe("a moça")
+  })
+
+  it("reads nothing from the other openers", () => {
+    expect(display("Vi @[")).toBe("")
+
+    expect(display("—[")).toBe("")
+  })
+})
+
+describe("displayGender — the closed class only", () => {
+  it("reads pt and en pronouns and articles from the leading word", () => {
+    expect(displayGender("Ela")).toBe("f")
+    expect(displayGender("a moça")).toBe("f")
+    expect(displayGender("ele")).toBe("m")
+    expect(displayGender("o velho")).toBe("m")
+    expect(displayGender("She")).toBe("f")
+  })
+
+  it("abstains on everything else — names, eu, empty", () => {
+    expect(displayGender("eu")).toBe("unknown")
+    expect(displayGender("Mizoguchi")).toBe("unknown")
+    expect(displayGender("")).toBe("unknown")
+  })
+})
+
+// The cast used for ranking: two women, two men, one unknown — declared in an
+// order the signals must visibly rearrange.
+const RANKED_FRONT = [
+  "---",
+  "title: Demo",
+  "character: Rui",
+  "character: Marta",
+  "character: Bento",
+  "character: Alda",
+  "character: Zimba",
+  "---",
+  "",
+]
+
+function rankedSource(body: string): readonly string[] {
+  const text = [...RANKED_FRONT, body].join("\n")
+  const cursor = text.indexOf("|", RANKED_FRONT.join("\n").length)
+  const doc = text.slice(0, cursor) + text.slice(cursor + 1)
+  const state = EditorState.create({ doc })
+
+  return labels(characterCompletions(new CompletionContext(state, cursor, true)))
+}
+
+describe("ranking — gender, recency, declaration", () => {
+  afterEach(() => setCastGenders([]))
+
+  it("with no signals at all, declaration order stands", () => {
+    expect(rankedSource("Chegaram todos. @[|")).toEqual(["Rui", "Marta", "Bento", "Alda", "Zimba"])
+  })
+
+  it("a feminine display lifts the women, keeps the unknown mid, sinks the men — none dropped", () => {
+    setCastGenders([
+      { slug: "rui", gender: "m" },
+      { slug: "marta", gender: "f" },
+      { slug: "bento", gender: "m" },
+      { slug: "alda", gender: "f" },
+      { slug: "zimba", gender: "unknown" },
+    ])
+
+    expect(rankedSource("Chegaram todos. {Ela}[|")).toEqual(["Marta", "Alda", "Zimba", "Rui", "Bento"])
+  })
+
+  it("a masculine display mirrors it", () => {
+    setCastGenders([
+      { slug: "rui", gender: "m" },
+      { slug: "marta", gender: "f" },
+      { slug: "bento", gender: "m" },
+      { slug: "alda", gender: "f" },
+      { slug: "zimba", gender: "unknown" },
+    ])
+
+    expect(rankedSource("Chegaram todos. {Ele}[|")).toEqual(["Rui", "Bento", "Zimba", "Marta", "Alda"])
+  })
+
+  it("recency decides inside a tier — the one mentioned nearest the cursor leads", () => {
+    setCastGenders([
+      { slug: "marta", gender: "f" },
+      { slug: "alda", gender: "f" },
+    ])
+
+    expect(rankedSource("Marta saiu cedo. Alda ficou na sala. {Ela}[|")).toEqual([
+      "Alda",
+      "Marta",
+      "Rui",
+      "Bento",
+      "Zimba",
+    ])
+  })
+
+  it("recency alone reorders a bare opener — the scene's active people first", () => {
+    expect(rankedSource("Zimba dormia. Bento lia perto. @[|")).toEqual(["Bento", "Zimba", "Rui", "Marta", "Alda"])
+  })
+
+  it("a binding payload counts as a mention — [Nome] is presence on the page", () => {
+    expect(rankedSource("{Ela}[Alda] entrou. @[|")).toEqual(["Alda", "Rui", "Marta", "Bento", "Zimba"])
+  })
+
+  it("frontmatter declarations are NOT mentions — recency never reads them", () => {
+    // Without the body-start guard, `character:` lines would hand every member
+    // a position and quietly reverse declaration order.
+    expect(rankedSource("Nada aconteceu ainda. @[|")).toEqual(["Rui", "Marta", "Bento", "Alda", "Zimba"])
+  })
+
+  it("gender outranks recency — a just-mentioned man still sinks under `Ela`", () => {
+    setCastGenders([
+      { slug: "rui", gender: "m" },
+      { slug: "marta", gender: "f" },
+      { slug: "bento", gender: "m" },
+      { slug: "alda", gender: "f" },
+      { slug: "zimba", gender: "unknown" },
+    ])
+
+    expect(rankedSource("Bento fechou a porta. {Ela}[|")).toEqual(["Marta", "Alda", "Zimba", "Bento", "Rui"])
+  })
+
+  it("ranking still applies under a typed partial with a shared prefix", () => {
+    setCastGenders([
+      { slug: "marta", gender: "f" },
+      { slug: "bento", gender: "m" },
+    ])
+
+    const front = ["---", "character: Mario", "character: Marta", "---", ""]
+    const text = [...front, "Chegaram. {Ela}[mar"].join("\n")
+    const cursor = text.length
+    const state = EditorState.create({ doc: text })
+
+    expect(labels(characterCompletions(new CompletionContext(state, cursor, true)))).toEqual(["Marta", "Mario"])
+  })
+
+  it("the seam resets clean — a fresh book carries no stale genders", () => {
+    expect(castGenders().size).toBe(0)
+  })
+
+  it("habit outranks everything — a display bound before leads with its usual member", () => {
+    setCastGenders([
+      { slug: "marta", gender: "f" },
+      { slug: "rui", gender: "m" },
+    ])
+
+    // `{eu}` has always meant Rui; neither gender nor Marta's fresher mention
+    // dislodges the author's own precedent.
+    expect(rankedSource("{eu}[Rui] escrevi. Marta chegou. {eu}[|")).toEqual([
+      "Rui",
+      "Marta",
+      "Bento",
+      "Alda",
+      "Zimba",
+    ])
+  })
+
+  it("habit is per-display and case-folded — `{ela}` history says nothing about `{ele}`", () => {
+    expect(rankedSource("{Ela}[Alda] saiu. {ela}[|")).toEqual(["Alda", "Rui", "Marta", "Bento", "Zimba"])
+
+    expect(rankedSource("{Ela}[Alda] saiu. Bento entrou. {ele}[|")).toEqual([
+      "Bento",
+      "Alda",
+      "Rui",
+      "Marta",
+      "Zimba",
+    ])
+  })
+})
+
+// The corners the earlier rounds left unpinned.
+describe("openers that must never offer the cast", () => {
+  it("a time pin `~[` takes a date, not a name", () => {
+    expect(sourceAt("~[|").result).toBeNull()
+  })
+
+  it("an accent typed where the name has none still folds home", () => {
+    expect(labels(sourceAt("Vi @[mâr|").result)).toEqual(["Maria Costa"])
   })
 })

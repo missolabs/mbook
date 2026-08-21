@@ -113,6 +113,19 @@ export const eventPayload = {
       }),
     ),
   }),
+
+  // The compiler asks: the book's cast with each member's grammatical gender —
+  // the linguistic ground the completion ranking stands on.
+  "evt:cast": z.object({
+    path: z.string(),
+    members: z.array(
+      z.object({
+        slug: z.string(),
+        name: z.string(),
+        gender: z.enum(["f", "m", "unknown"]),
+      }),
+    ),
+  }),
   "evt:menu": z.discriminatedUnion("action", [
     z.object({ action: z.literal("new") }),
     z.object({ action: z.literal("open") }),

@@ -496,6 +496,84 @@ describe("authored time pins, declarations and the lint surface", () => {
   })
 })
 
+describe("cast gender", () => {
+  function genderOf(analysisMembers: ReturnType<typeof analyze>["castMembers"], slug: string): string {
+    return analysisMembers.find((m) => m.slug === slug)?.gender ?? "missing"
+  }
+
+  it("reads dictionary genders for names the lexicon knows, unknown for the rest", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "character: Daniela",
+      "character: Hellmanns",
+      "---",
+      "",
+      "@[Rei] chegou cedo.",
+    ].join("\n")
+
+    const members = analyze(book, BOTH).castMembers
+
+    expect(genderOf(members, "rei")).toBe("m")
+    expect(genderOf(members, "daniela")).toBe("f")
+    expect(genderOf(members, "hellmanns")).toBe("unknown")
+  })
+
+  it("falls back to the common-noun reading for a role-shaped name", () => {
+    const book = ["---", "language: pt-BR", "character: Narrador", "---", "", "{eu}[Narrador] escrevi."].join("\n")
+
+    expect(genderOf(analyze(book, BOTH).castMembers, "narrador")).toBe("m")
+  })
+
+  it("lets the author's own display groups gender an unknown name", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Hellmanns",
+      "---",
+      "",
+      "{Ela}[Hellmanns] dormia no sofá. {Ela}[Hellmanns] acordou com fome.",
+    ].join("\n")
+
+    expect(genderOf(analyze(book, BOTH).castMembers, "hellmanns")).toBe("f")
+  })
+
+  it("authored evidence outranks the dictionary — the author's word is final", () => {
+    // A cat named Daniela addressed as `ele`: the dictionary says fs, the
+    // author says otherwise, twice to one.
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Daniela",
+      "---",
+      "",
+      "{Ele}[Daniela] dormia. {Ele}[Daniela] acordou.",
+    ].join("\n")
+
+    expect(genderOf(analyze(book, BOTH).castMembers, "daniela")).toBe("m")
+  })
+
+  it("a gender tie among display groups abstains and the dictionary decides", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Daniela",
+      "---",
+      "",
+      "{Ela}[Daniela] saiu. {Ele}[Daniela] voltou.",
+    ].join("\n")
+
+    expect(genderOf(analyze(book, BOTH).castMembers, "daniela")).toBe("f")
+  })
+
+  it("a name-shaped display votes nothing — @[Rei] genders no one by itself", () => {
+    const book = ["---", "language: pt-BR", "character: Hellmanns", "---", "", "@[Hellmanns] miou."].join("\n")
+
+    expect(genderOf(analyze(book, BOTH).castMembers, "hellmanns")).toBe("unknown")
+  })
+})
+
 describe("the timeline crosses paragraph breaks", () => {
   it("the last perfective of one paragraph precedes the first of the next", () => {
     const book = [
