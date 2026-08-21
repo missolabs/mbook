@@ -34,6 +34,11 @@ const MODELS = ["gemma3:12b", "gemma3:4b"]
 
 const TARGET_KINDS = new Set(["unresolved-pronoun", "empty-binding"])
 
+// A plural pronoun can never mean ONE cast member — the enum would force a
+// bluff (the battery's dangling `elas` answered `Rei`). Plurals are the
+// engine's split-antecedent rule to resolve; the sidecar refuses the question.
+const PLURAL_PRONOUNS = new Set(["eles", "elas", "they", "them"])
+
 // At most this many asks per analysis pass — a page of dangling pronouns must
 // not queue a minute of model time behind a keystroke.
 const CAP = 8
@@ -46,9 +51,16 @@ export function suggestTargets(items: readonly DiagnosticPayload[]): readonly Di
   for (const item of items) {
     switch (TARGET_KINDS.has(item.kind) && targets.length < CAP) {
       case true:
-        targets.push(item)
+        break
+      case false:
+        continue
+    }
+
+    switch (item.kind === "unresolved-pronoun" && PLURAL_PRONOUNS.has(item.detail.toLowerCase())) {
+      case true:
         continue
       case false:
+        targets.push(item)
         continue
     }
   }

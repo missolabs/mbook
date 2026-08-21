@@ -425,6 +425,21 @@ function linkAnaphors(links: DiscourseLink[], input: DiscourseInput, si: number)
             break
         }
 
+        // SPLIT ANTECEDENT: a plural with no plural nominal behind it may sum
+        // a coordination of singulars — one link per conjunct.
+        const summed = resolveCoordination(input, si, ti, hint!.feat)
+
+        switch (summed.length >= 2) {
+          case true: {
+            for (const anchor of summed) {
+              links.push(anaphoraLink(si, ti, anchor))
+            }
+            return
+          }
+          case false:
+            break
+        }
+
         // CATAPHORA: a pronoun with nothing behind it may point forward to
         // its own sentence's matrix subject — `Quando ELA chegou, Daniela
         // sorriu`.
@@ -493,59 +508,148 @@ function resolveAgreeing(input: DiscourseInput, si: number, ti: number, feat: st
       }
     }
 
-    // A PLURAL pronoun may take a coordinated pair as its antecedent: `Rei e
-    // Daniela chegaram. ELES riam.` — the pair matches where no single
-    // nominal can; the anchor is the pair's first conjunct.
-    switch (feat.length > 1 && feat[1] === "p") {
-      case true: {
-        const pair = coordinatedPair(sentence, limit)
-
-        switch (pair.kind) {
-          case "some":
-            return { kind: "some", value: { sentence: sj, token: pair.value } }
-          case "none":
-            break
-        }
-        break
-      }
-      case false:
-        break
-    }
   }
 
   return { kind: "none" }
 }
 
-// The last `NP CONJ NP` chain before `limit`, as its first conjunct's head.
-function coordinatedPair(sentence: Sentence, limit: number): Optional<number> {
-  let best: Optional<number> = { kind: "none" }
+// ─── split antecedents ───────────────────────────────────────────────────────
+// A plural pronoun with no plural antecedent may SUM a coordination of
+// singulars: `Tinha uma esposa, que também não era de S, e uma filha. …
+// nenhuma referência a ELAS` — esposa + filha, joined by the conjunction,
+// are the referent no single nominal can be. The rule is gender-strict the
+// way Portuguese is: a feminine plural demands every conjunct feminine (an
+// unknown never passes — the relative clause's `S` must not sneak in); a
+// masculine plural absorbs any mix. One link per conjunct — the graph
+// credits them all.
+function resolveCoordination(input: DiscourseInput, si: number, ti: number, feat: string): readonly Anchor[] {
+  switch (feat.length > 1 && feat[1] === "p") {
+    case false:
+      return []
+    case true:
+      break
+  }
 
-  for (let k = 0; k + 1 < sentence.chunks.length; k++) {
-    const a = sentence.chunks[k]!
-    const b = sentence.chunks[k + 1]!
+  for (let sj = si; sj >= 0; sj--) {
+    const sentence = input.sentences[sj]!
+    const limit = sj === si ? ti : sentence.tokens.length
+    const conjuncts = conjunctsBefore(sentence, limit, feat)
 
-    const chained =
-      a.kind === "NP" &&
-      b.kind === "NP" &&
-      b.from === a.to + 1 &&
-      b.to <= limit &&
-      isConjToken(sentence, a.to) &&
-      nominalHead(sentence, a.head) &&
-      nominalHead(sentence, b.head)
-
-    switch (chained) {
+    switch (conjuncts.length >= 2) {
       case true:
-        best = { kind: "some", value: a.head }
-        continue
+        return conjuncts.map((token) => ({ sentence: sj, token }))
       case false:
         continue
     }
   }
 
-  return best
+  return []
 }
 
-function isConjToken(sentence: Sentence, at: number): boolean {
+// The conjunct heads of the last additive coordination before `limit`, in
+// textual order: the NP right after the final `e`/`and`, its mate the nearest
+// earlier NP that is neither a preposition's object nor of an incompatible
+// gender, and further NPs chained on by bare commas. Relative clauses and
+// other chunks BETWEEN conjuncts are stepped over; a gender-incompatible NP
+// is a hard stop — a mixed pair is not a feminine sum.
+function conjunctsBefore(sentence: Sentence, limit: number, feat: string): readonly number[] {
+  const chunks = sentence.chunks
+
+  for (let k = chunks.length - 1; k >= 0; k--) {
+    const last = chunks[k]!
+
+    const opens =
+      last.kind === "NP" &&
+      last.to <= limit &&
+      nominalHead(sentence, last.head) &&
+      additiveConjAt(sentence, last.from - 1) &&
+      genderCompatible(sentence, last.head, feat)
+
+    switch (opens) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const mates = mateChain(sentence, chunks, k, feat)
+
+    switch (mates.length === 0) {
+      case true:
+        return []
+      case false:
+        return [...mates, last.head]
+    }
+  }
+
+  return []
+}
+
+// Walk back from the after-conj conjunct: skip non-NP chunks (the relative
+// clause's VP) and preposition-governed NPs (`de S`), stop hard on a wrong
+// gender. The first mate found may extend further back over bare commas —
+// `o teclado, o monitor e o laptop` sums all three.
+function mateChain(
+  sentence: Sentence,
+  chunks: Sentence["chunks"],
+  after: number,
+  feat: string,
+): readonly number[] {
+  for (let j = after - 1; j >= 0; j--) {
+    const chunk = chunks[j]!
+
+    switch (chunk.kind === "NP" && nominalHead(sentence, chunk.head)) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    switch (prepGoverned(sentence, chunk.from)) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    switch (genderCompatible(sentence, chunk.head, feat)) {
+      case false:
+        return []
+      case true:
+        break
+    }
+
+    const mates = [chunk.head]
+
+    for (let p = j - 1; p >= 0; p--) {
+      const prev = chunks[p]!
+
+      const chained =
+        prev.kind === "NP" &&
+        nominalHead(sentence, prev.head) &&
+        onlyCommasBetween(sentence, prev.to, chunks[p + 1]!.from) &&
+        genderCompatible(sentence, prev.head, feat)
+
+      switch (chained) {
+        case true:
+          mates.unshift(prev.head)
+          continue
+        case false:
+          break
+      }
+
+      break
+    }
+
+    return mates
+  }
+
+  return []
+}
+
+// Only the additive coordinator sums referents — `mas` and `ou` conjoin
+// clauses and alternatives, never a plural's parts.
+function additiveConjAt(sentence: Sentence, at: number): boolean {
   const token = sentence.tokens[at]
 
   switch (token === undefined) {
@@ -559,7 +663,73 @@ function isConjToken(sentence: Sentence, at: number): boolean {
     case "punctuation":
       return false
     case "content":
-      return token!.tagged.pos === "CONJ"
+      break
+  }
+
+  switch (token!.tagged.pos === "CONJ") {
+    case false:
+      return false
+    case true:
+      break
+  }
+
+  switch (token!.tagged.token.text.toLowerCase()) {
+    case "e":
+    case "and":
+      return true
+    default:
+      return false
+  }
+}
+
+function prepGoverned(sentence: Sentence, from: number): boolean {
+  for (let at = from - 1; at >= 0; at--) {
+    const token = sentence.tokens[at]!
+
+    switch (token.role) {
+      case "punctuation":
+        continue
+      case "content":
+        return token.tagged.pos === "ADP"
+    }
+  }
+
+  return false
+}
+
+function onlyCommasBetween(sentence: Sentence, from: number, to: number): boolean {
+  for (let at = from; at < to; at++) {
+    const token = sentence.tokens[at]!
+
+    switch (token.role) {
+      case "punctuation":
+        continue
+      case "content":
+        return false
+    }
+  }
+
+  return true
+}
+
+// A feminine plural demands feminine conjuncts, strictly — a gender-unknown
+// name never passes. A masculine plural is the mixed-gender sum and accepts
+// anything, matching how the language itself resolves.
+function genderCompatible(sentence: Sentence, at: number, feat: string): boolean {
+  switch (feat[0] === "f") {
+    case false:
+      return true
+    case true:
+      break
+  }
+
+  const token = sentence.tokens[at]!
+
+  switch (token.role) {
+    case "punctuation":
+      return false
+    case "content":
+      return token.tagged.feat[0] === "f"
   }
 }
 

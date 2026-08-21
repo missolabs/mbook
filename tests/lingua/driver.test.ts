@@ -496,6 +496,40 @@ describe("authored time pins, declarations and the lint surface", () => {
   })
 })
 
+describe("split antecedents stand the pronoun lint down", () => {
+  it("a summed coordination resolves the plural — no note survives", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "@[Rei] se mudou antes de mim. Tinha uma esposa, que também não era de S, e uma filha, que era. Um teclado, um monitor, e seu laptop, mas nenhuma referência a elas.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.diagnostics.filter((d) => d.kind === "unresolved-pronoun")).toEqual([])
+  })
+
+  it("a plural with no valid sum still dangles honestly", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "Um teclado e um monitor brilhavam na mesa. Elas nunca funcionaram.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+    const notes = analysis.diagnostics.filter((d) => d.kind === "unresolved-pronoun")
+
+    expect(notes.length).toBe(1)
+    expect(notes[0]!.detail).toBe("Elas")
+  })
+})
+
 describe("cast gender", () => {
   function genderOf(analysisMembers: ReturnType<typeof analyze>["castMembers"], slug: string): string {
     return analysisMembers.find((m) => m.slug === slug)?.gender ?? "missing"

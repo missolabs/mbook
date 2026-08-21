@@ -45,6 +45,22 @@ describe("suggestTargets", () => {
     expect(targets.length).toBe(8)
     expect(targets.every((t) => t.kind === "unresolved-pronoun" || t.kind === "empty-binding")).toBe(true)
   })
+
+  it("refuses a plural pronoun — no single cast member can be the answer", () => {
+    const plurals: DiagnosticPayload[] = [
+      { kind: "unresolved-pronoun", from: 0, to: 4, detail: "elas" },
+      { kind: "unresolved-pronoun", from: 10, to: 14, detail: "Eles" },
+      { kind: "unresolved-pronoun", from: 20, to: 24, detail: "they" },
+    ]
+
+    expect(suggestTargets(plurals)).toEqual([])
+
+    // An empty binding whose display happens to be plural still asks — the
+    // author wrote the glyph on purpose.
+    const authored: DiagnosticPayload = { kind: "empty-binding", from: 0, to: 9, detail: "elas" }
+
+    expect(suggestTargets([authored])).toEqual([authored])
+  })
 })
 
 describe("wordOf", () => {

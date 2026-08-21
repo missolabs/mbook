@@ -45,6 +45,17 @@ function analyze(text: string): ParagraphAnalysis {
   return analyzeParagraph({ text, spans: scanLine(text, CAST), lexicon: PT, language: { kind: "pt-BR" } })
 }
 
+function wordAt(analysis: ParagraphAnalysis, si: number, ti: number): string {
+  const token = analysis.sentences[si]!.tokens[ti]!
+
+  switch (token.role) {
+    case "punctuation":
+      return "?"
+    case "content":
+      return token.tagged.token.text
+  }
+}
+
 function only(text: string): Sentence {
   const analysis = analyze(text)
 
@@ -1252,15 +1263,49 @@ describe("discourse: forward, plural and rhetorical reference", () => {
     expect(to.role === "content" && to.tagged.token.text).toBe("Kirie")
   })
 
-  it("a plural pronoun takes a coordinated pair", () => {
+  it("a plural pronoun takes a coordinated pair — one link PER conjunct", () => {
     const analysis = analyze("Mizoguchi e Kirie chegaram cedo. Eles riam.")
     const links = analysis.discourse.filter((d) => d.kind === "anaphora")
 
-    expect(links.length).toBe(1)
-    expect(links[0]!.toSentence).toBe(0)
+    expect(links.length).toBe(2)
+    expect(links.every((l) => l.toSentence === 0)).toBe(true)
 
-    const to = analysis.sentences[0]!.tokens[links[0]!.toToken]!
-    expect(to.role === "content" && to.tagged.token.text).toBe("Mizoguchi")
+    const names = links.map((l) => {
+      const to = analysis.sentences[0]!.tokens[l.toToken]!
+      return to.role === "content" ? to.tagged.token.text : "?"
+    })
+    expect(names).toEqual(["Mizoguchi", "Kirie"])
+  })
+
+  it("a split antecedent survives an interposed relative clause", () => {
+    // The Cat Drivers sentence that motivated the rule: esposa + filha sum to
+    // ELAS across `que também não era de S` — and the relative's own `S`
+    // (gender-unknown, preposition-governed) must not sneak into the pair.
+    const analysis = analyze(
+      "Tinha uma esposa, que também não era de S, e uma filha, que era. Um teclado, um monitor, uma Hera, e seu laptop, mas nenhuma referência a elas.",
+    )
+
+    const elas = analysis.discourse.filter((d) => d.kind === "anaphora" && d.fromSentence === 1 && wordAt(analysis, d.fromSentence, d.fromToken) === "elas")
+
+    expect(elas.length).toBe(2)
+    expect(elas.map((l) => wordAt(analysis, l.toSentence, l.toToken))).toEqual(["esposa", "filha"])
+  })
+
+  it("a feminine plural refuses a masculine coordination — strict gender sum", () => {
+    const analysis = analyze("Um teclado e um monitor brilhavam na mesa. Elas não funcionavam.")
+
+    const elas = analysis.discourse.filter((d) => d.kind === "anaphora" && d.fromSentence === 1)
+
+    expect(elas.length).toBe(0)
+  })
+
+  it("a comma chain sums every conjunct — three links for three things", () => {
+    const analysis = analyze("O teclado, o monitor e o laptop sumiram na mudança. Eles custaram caro.")
+
+    const eles = analysis.discourse.filter((d) => d.kind === "anaphora" && d.fromSentence === 1)
+
+    expect(eles.length).toBe(3)
+    expect(eles.map((l) => wordAt(analysis, l.toSentence, l.toToken))).toEqual(["teclado", "monitor", "laptop"])
   })
 
   it("a sentence-initial mas asserts contrast with its predecessor", () => {
