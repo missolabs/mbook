@@ -588,6 +588,53 @@ describe("the first-person voice is book-global", () => {
 
     expect(analysis.bookLinks.filter((l) => l.kind === "elided-subject" && l.fromParagraph === 1)).toEqual([])
   })
+
+  it("an EXPLICIT eu subject claims the voice — anaphora from the pronoun itself", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Narrador",
+      "---",
+      "",
+      "Nessa época eu comecei a consumir histórias.",
+      "",
+      "{eu}[Narrador] escrevi sobre isso.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+    const claims = analysis.bookLinks.filter((l) => l.kind === "anaphora" && l.fromParagraph === 0)
+
+    expect(claims.length).toBe(1)
+    expect(claims[0]!.toParagraph).toBe(1)
+  })
+
+  it("typeset verse never reaches the pipeline — the poem is not on the timeline", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Narrador",
+      "---",
+      "",
+      "{eu}[Narrador] escrevi um poema.",
+      "",
+      "-> Tic Tac <-",
+      "-> O som do ponteiro anuncia <-",
+      "",
+      "Depois guardei o caderno.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    // Two prose paragraphs analyzed; the centered block is display only.
+    expect(analysis.paragraphs.length).toBe(2)
+
+    const words = analysis.paragraphs.flatMap((slot) =>
+      slot.analysis.sentences.flatMap((s) =>
+        s.tokens.flatMap((t) => (t.role === "content" ? [t.tagged.token.text] : [])),
+      ),
+    )
+    expect(words).not.toContain("ponteiro")
+  })
 })
 
 describe("causal timeline edges", () => {

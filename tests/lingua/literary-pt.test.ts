@@ -120,6 +120,31 @@ function dependentsOf(sentence: Sentence, kind: RelationKind, headText: string):
     .map((r) => textAt(sentence, r.dependent))
 }
 
+describe("the pre-reform orthography bridge", () => {
+  it("an unknown pre-AO90 spelling retags as its modern entry", () => {
+    const sentence = only("Meus ímpetos heróicos começaram cedo.")
+
+    const heroicos = sentence.tokens[2]!
+    expect(heroicos.role === "content" && heroicos.tagged.pos).toBe("ADJ")
+    expect(heroicos.role === "content" && heroicos.tagged.lemma).toBe("heroico")
+
+    // With the adjective out of the way, the true head carries the subject.
+    const subject = sentence.relations.find((r) => r.kind === "subject-of")
+    const head = sentence.tokens[subject!.dependent]!
+    expect(head.role === "content" && head.tagged.token.text).toBe("ímpetos")
+  })
+
+  it("the exact entry always outranks the bridge — a known old spelling keeps its own lemma", () => {
+    // DELAF carries idéia in BOTH orthographies; the bridge must never fire
+    // when the exact form is known.
+    const sentence = only("A idéia sobreviveu.")
+
+    const ideia = sentence.tokens[1]!
+    expect(ideia.role === "content" && ideia.tagged.lemma).toBe("idéia")
+    expect(ideia.role === "content" && ideia.tagged.pos).toBe("NOUN")
+  })
+})
+
 describe("Mishima: the pavilion burns — the full passive periphrasis", () => {
   const sentence = only("O Pavilhão Dourado foi destruído pelo fogo.")
 

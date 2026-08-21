@@ -258,11 +258,61 @@ function candidatesFor(
       break
   }
 
+  const lowercaseAllowed = isCapitalized(token.text) === false || initial
+
   switch (initial && isCapitalized(token.text)) {
-    case true:
-      return input.lexicon.lookup(lower, input.scope)
+    case true: {
+      const folded = input.lexicon.lookup(lower, input.scope)
+
+      switch (folded.length > 0) {
+        case true:
+          return folded
+        case false:
+          break
+      }
+      break
+    }
+    case false:
+      break
+  }
+
+  // The pre-reform orthography bridge: AO90 deleted exactly three accent
+  // classes — ói/éi diphthongs (heróico→heroico, idéia→ideia), ôo/êe
+  // (vôo→voo, vêem→veem) and the trema (lingüiça→linguiça). An unknown word
+  // written the old way retags as its modern entry; the lemma then carries
+  // the modern spelling, which is the disclosure. Mid-sentence capitalized
+  // words keep their PROPN path — the bridge never lowercases what the
+  // casefold rule wouldn't.
+  switch (lowercaseAllowed) {
     case false:
       return exact
+    case true:
+      break
+  }
+
+  const reform = reformSpelling(lower)
+
+  switch (reform.kind) {
+    case "none":
+      return exact
+    case "some":
+      return input.lexicon.lookup(reform.value, input.scope)
+  }
+}
+
+function reformSpelling(lower: string): Optional<string> {
+  const modern = lower
+    .replace(/ü/g, "u")
+    .replace(/ói/g, "oi")
+    .replace(/éi/g, "ei")
+    .replace(/ôo/g, "oo")
+    .replace(/êe/g, "ee")
+
+  switch (modern === lower) {
+    case true:
+      return { kind: "none" }
+    case false:
+      return { kind: "some", value: modern }
   }
 }
 

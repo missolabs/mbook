@@ -208,9 +208,12 @@ export function analyzeBook(
   const starts = lineStarts(lines)
   const chapters = chapterList(doc)
 
-  const paragraphs = paragraphBlocks(doc.blocks).map((block, index) =>
-    analyzeSlot(block, index, lines, spans, starts, chapters, lexicon.value, language),
-  )
+  // Typeset verse — a paragraph whose EVERY line is centered (`-> Tic Tac <-`)
+  // — is display, not narration: the poem never reaches the pipeline, so its
+  // lines put no events on the timeline and no words in the graph.
+  const paragraphs = paragraphBlocks(doc.blocks)
+    .filter((block) => verseBlock(lines, block) === false)
+    .map((block, index) => analyzeSlot(block, index, lines, spans, starts, chapters, lexicon.value, language))
 
   const aliases = collectAliases(paragraphs, cast)
   const declarations = buildDeclarations(doc)
@@ -717,6 +720,21 @@ function nearestAttributed(
 // The narrative chain over block boundaries: adjacent paragraphs' perfective
 // anchors join with a before-edge — the same advancement rule, one level up.
 // A CHAPTER break is a legitimate time jump and never auto-stitches.
+function verseBlock(lines: readonly string[], block: { fromLine: number; toLine: number }): boolean {
+  for (let n = block.fromLine; n <= block.toLine; n++) {
+    const line = (lines[n] ?? "").trim()
+
+    switch (line.startsWith("->") && line.endsWith("<-")) {
+      case true:
+        continue
+      case false:
+        return false
+    }
+  }
+
+  return true
+}
+
 // ─── the first-person voice ──────────────────────────────────────────────────
 // The narrating `eu` is BOOK-GLOBAL: when every first-person display glyph in
 // the book ({eu}[Narrador], {Eu}[X]) binds the same character, that character
@@ -793,6 +811,56 @@ function voiceLinks(
           provenance: "discourse",
         })
       }
+
+      // An EXPLICIT first-person subject (`Nessa época eu comecei…`) claims
+      // the voice too — an anaphora link from the pronoun itself. Tokens that
+      // ARE voice mentions ({eu}[Narrador] displays) need no link.
+      sentence.tokens.forEach((token, ti) => {
+        switch (token.role) {
+          case "punctuation":
+            return
+          case "content":
+            break
+        }
+
+        switch (firstPersonWord(token.tagged.token.text, lexicon)) {
+          case false:
+            return
+          case true:
+            break
+        }
+
+        switch (sentence.relations.some((r) => r.kind === "subject-of" && r.dependent === ti)) {
+          case false:
+            return
+          case true:
+            break
+        }
+
+        const isMention = mentions.some(
+          (m) => m.paragraph === slot.index && m.sentence === si && m.token === ti,
+        )
+
+        switch (isMention || hasAnaphora(slot.analysis.discourse, si, ti)) {
+          case true:
+            return
+          case false:
+            break
+        }
+
+        const anchor = voiceAnchorFor(mentions, slot.index, si)
+
+        links.push({
+          kind: "anaphora",
+          fromParagraph: slot.index,
+          fromSentence: si,
+          fromToken: ti,
+          toParagraph: anchor.paragraph,
+          toSentence: anchor.sentence,
+          toToken: anchor.token,
+          provenance: "discourse",
+        })
+      })
     })
   }
 
@@ -891,6 +959,10 @@ function unclaimedFirstPerson(sentence: Sentence, head: number, lexicon: Lexicon
 
 function hasElidedSubject(links: readonly DiscourseLink[], si: number, ti: number): boolean {
   return links.some((l) => l.kind === "elided-subject" && l.fromSentence === si && l.fromToken === ti)
+}
+
+function hasAnaphora(links: readonly DiscourseLink[], si: number, ti: number): boolean {
+  return links.some((l) => l.kind === "anaphora" && l.fromSentence === si && l.fromToken === ti)
 }
 
 function hasBookElidedSubject(links: readonly BookLink[], p: number, si: number, ti: number): boolean {
