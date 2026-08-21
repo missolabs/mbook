@@ -406,10 +406,20 @@ html {
 /* CodeMirror classes the returned dom as the tooltip ITSELF, and its
    injected light base theme loads after ours — the combined selector plus
    !important is the honest counterweight. */
+/* The card is an mdesign OVERLAY: the app is fully translucent, so a
+   floating surface must not read as an opaque slab. MEASURED CAVEAT:
+   backdrop-filter no-ops in the vibrancy window even over sheet content
+   (Chromium skips backdrop compositing on transparent backings — verified
+   live, the same failure the command bar hit). The compensation is alpha
+   0.88 — translucent enough to belong to the material, opaque enough to
+   read over prose — with the blur DECLARED so the surface upgrades itself
+   the day the platform honours it. */
 .cm-tooltip.mb-diag-card {
-  background: var(--m-panel) !important;
+  background: rgba(27, 27, 29, 0.88) !important;
   border: 1px solid var(--m-hair-strong) !important;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 50px -8px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
   padding: 10px 12px;
   max-width: 300px;
   font-family: -apple-system, sans-serif;
@@ -445,6 +455,13 @@ html {
 .mb-diag-card-key {
   font-size: 10.5px;
   color: var(--m-mist);
+}
+
+/* The completion popup follows the same overlay truth: the generated token
+   is opaque, so the translucent authored surface overrides it here. */
+.cm-tooltip.cm-tooltip-autocomplete {
+  background: rgba(27, 27, 29, 0.88) !important;
+  box-shadow: 0 20px 50px -8px rgba(0, 0, 0, 0.65) !important;
 }
 
 .mb-notes-count {
