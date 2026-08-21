@@ -10,6 +10,9 @@ export type StatusState = {
     | { kind: "empty" }
     | { kind: "counted"; page: number; totalPages: number; words: number }
   zoom: number
+  // The compiler's open questions for this book — gold when any remain (R1:
+  // an unread-class life signal).
+  notes: number
 }
 
 const EM_DASH = "—"
@@ -26,7 +29,22 @@ export class Statusbar {
   render(state: StatusState): void {
     this.left.textContent = fileText(state.file)
 
-    this.right.textContent = `${countsText(state.counts)} · ${zoomText(state.zoom)}`
+    this.right.textContent = ""
+
+    switch (state.notes > 0) {
+      case true: {
+        const count = document.createElement("span")
+        count.className = "mb-notes-count"
+        count.textContent = String(state.notes)
+        this.right.appendChild(count)
+        this.right.appendChild(document.createTextNode(" notas · "))
+        break
+      }
+      case false:
+        break
+    }
+
+    this.right.appendChild(document.createTextNode(`${countsText(state.counts)} · ${zoomText(state.zoom)}`))
   }
 }
 

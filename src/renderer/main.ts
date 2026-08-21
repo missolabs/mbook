@@ -20,6 +20,7 @@ import { Navigator } from "./navigator"
 import { DocSession } from "./doc-session"
 import { PageTracker } from "./page-tracker"
 import { createEditor, programmatic } from "./editor/editor"
+import { setDiagnostics } from "./editor/diagnostics"
 import type { DocReflow } from "./editor/editor"
 import { setPageJoints } from "./editor/page-breaks"
 import type { PageJoints } from "./editor/page-breaks"
@@ -188,12 +189,20 @@ class StatusModel {
   private file: StatusState["file"]
   private counts: StatusState["counts"]
   private zoom: StatusState["zoom"]
+  private notes: number
 
   constructor(view: Statusbar) {
     this.view = view
     this.file = { kind: "untitled" }
     this.counts = { kind: "empty" }
     this.zoom = 1
+    this.notes = 0
+  }
+
+  setNotes(notes: number): void {
+    this.notes = notes
+
+    this.render()
   }
 
   setFile(file: StatusState["file"]): void {
@@ -215,7 +224,7 @@ class StatusModel {
   }
 
   private render(): void {
-    this.view.render({ file: this.file, counts: this.counts, zoom: this.zoom })
+    this.view.render({ file: this.file, counts: this.counts, zoom: this.zoom, notes: this.notes })
   }
 }
 
@@ -520,6 +529,13 @@ switch (app) {
           return
       }
     }
+
+    // The compiler asks: diagnostics stream in after every background
+    // analysis; the editor underlines them and the statusbar counts them.
+    window.mbook.on("evt:diagnostics", (payload) => {
+      view.dispatch({ effects: setDiagnostics.of(payload.items) })
+      statusModel.setNotes(payload.items.length)
+    })
 
     window.mbook.on("evt:menu", (payload) => {
       switch (payload.action) {

@@ -390,3 +390,64 @@ html {
 .mb-fm-author {
   color: var(--m-mist);
 }
+
+/* ── the lint surface: sublinhado quieto ──────────────────────────────────
+   The compiler's notes as quiet dotted underlines (ink, never a new color);
+   the one under the caret is the open item and goes gold (R1). The card is
+   an mdesign panel: hairline, radius 0, gold only on the fix. */
+.mb-diag {
+  border-bottom: 1px dotted color-mix(in srgb, var(--m-mist) 70%, transparent);
+}
+
+.mb-diag-live {
+  border-bottom: 1px solid var(--m-gold);
+}
+
+/* CodeMirror classes the returned dom as the tooltip ITSELF, and its
+   injected light base theme loads after ours — the combined selector plus
+   !important is the honest counterweight. */
+.cm-tooltip.mb-diag-card {
+  background: var(--m-panel) !important;
+  border: 1px solid var(--m-hair-strong) !important;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  padding: 10px 12px;
+  max-width: 300px;
+  font-family: -apple-system, sans-serif;
+}
+
+.mb-diag-card-title {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--m-mist);
+  margin-bottom: 6px;
+}
+
+.mb-diag-card-body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--m-ink);
+}
+
+.mb-diag-card-fix {
+  margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.mb-diag-card-code {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--m-gold);
+}
+
+.mb-diag-card-key {
+  font-size: 10.5px;
+  color: var(--m-mist);
+}
+
+.mb-notes-count {
+  color: var(--m-gold);
+  font-weight: 600;
+}

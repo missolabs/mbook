@@ -157,6 +157,9 @@ export type Diagnostic = {
   sentence: number
   token: number
   detail: string
+  // Doc-absolute character range — what an editor underlines.
+  charFrom: number
+  charTo: number
 }
 
 export type BookAnalysisError = { kind: "lexicon-unavailable"; language: Language }
@@ -207,17 +210,59 @@ export function analyzeBook(
     aliases,
     aliasMentions: resolveAliasMentions(paragraphs, aliases, lexicon.value),
     turnGuesses: guessTurns(paragraphs, cast),
-    diagnostics: collectDiagnostics(paragraphs, lexicon.value, bookLinks),
+    diagnostics: collectDiagnostics(paragraphs, lexicon.value, bookLinks, starts),
   })
 }
 
 // ─── diagnostics ─────────────────────────────────────────────────────────────
+function spread(range: { from: number; to: number }): { charFrom: number; charTo: number } {
+  return { charFrom: range.from, charTo: range.to }
+}
+
 function collectDiagnostics(
   paragraphs: readonly ParagraphSlot[],
   lexicon: Lexicon,
   bookLinks: readonly BookLink[],
+  starts: readonly number[],
 ): readonly Diagnostic[] {
   const out: Diagnostic[] = []
+
+  // Doc-absolute range of a token (or of the whole sentence for token -1):
+  // the paragraph's first-line offset plus the token's paragraph-relative span.
+  const rangeOf = (slot: ParagraphSlot, si: number, ti: number): { from: number; to: number } => {
+    const base = starts[slot.fromLine] ?? 0
+    const sentence = slot.analysis.sentences[si]
+
+    switch (sentence === undefined) {
+      case true:
+        return { from: base, to: base }
+      case false:
+        break
+    }
+
+    switch (ti < 0) {
+      case true:
+        return { from: base + sentence!.source.from, to: base + sentence!.source.to }
+      case false:
+        break
+    }
+
+    const token = sentence!.tokens[ti]
+
+    switch (token === undefined) {
+      case true:
+        return { from: base + sentence!.source.from, to: base + sentence!.source.to }
+      case false:
+        break
+    }
+
+    switch (token!.role) {
+      case "content":
+        return { from: base + token!.tagged.token.source.from, to: base + token!.tagged.token.source.to }
+      case "punctuation":
+        return { from: base + token!.token.source.from, to: base + token!.token.source.to }
+    }
+  }
 
   for (const slot of paragraphs) {
     slot.analysis.sentences.forEach((sentence, si) => {
@@ -229,9 +274,12 @@ function collectDiagnostics(
             break
         }
 
-        switch (token.tagged.provenance === "contested") {
+        // Short closed-class collisions (`a`, `o`) are contested in the
+        // tagger's ledger but not actionable prose — the lint keeps to words
+        // an author could actually rephrase.
+        switch (token.tagged.provenance === "contested" && token.tagged.token.text.length >= 3) {
           case true:
-            out.push({ kind: "contested-token", paragraph: slot.index, sentence: si, token: ti, detail: token.tagged.token.text })
+            out.push({ kind: "contested-token", paragraph: slot.index, sentence: si, token: ti, detail: token.tagged.token.text, ...spread(rangeOf(slot, si, ti)) })
             break
           case false:
             break
@@ -260,7 +308,7 @@ function collectDiagnostics(
           case true:
             return
           case false:
-            out.push({ kind: "unresolved-pronoun", paragraph: slot.index, sentence: si, token: ti, detail: token.tagged.token.text })
+            out.push({ kind: "unresolved-pronoun", paragraph: slot.index, sentence: si, token: ti, detail: token.tagged.token.text, ...spread(rangeOf(slot, si, ti)) })
             return
         }
       })
@@ -280,6 +328,7 @@ function collectDiagnostics(
             sentence: (anchored.anchor as { sentence: number }).sentence,
             token: (anchored.anchor as { tokens: readonly number[] }).tokens[0] ?? -1,
             detail: (anchored.span.binding as { name: string }).name,
+            ...spread(rangeOf(slot, (anchored.anchor as { sentence: number }).sentence, (anchored.anchor as { tokens: readonly number[] }).tokens[0] ?? -1)),
           })
           continue
       }
@@ -298,7 +347,7 @@ function collectDiagnostics(
 
     switch (blocked) {
       case true:
-        out.push({ kind: "unstitched-chapter", paragraph: curr.index, sentence: 0, token: -1, detail: "chapter break — a ~[...] pin would order it" })
+        out.push({ kind: "unstitched-chapter", paragraph: curr.index, sentence: 0, token: -1, detail: "chapter break — a ~[...] pin would order it", ...spread(rangeOf(curr, 0, -1)) })
         continue
       case false:
         continue

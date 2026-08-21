@@ -25,6 +25,7 @@ import type { Lexicon } from "../../shared/lingua/lexicon"
 import type { Optional } from "../../shared/optional"
 import type { Result } from "../../shared/result"
 
+import { emitEvent } from "../ipc/events"
 import { getLingua } from "../lingua-holder"
 import type { Lingua } from "../lingua"
 import type { DictLang } from "../lingua-paths"
@@ -90,10 +91,23 @@ async function runOnce(path: string, content: string): Promise<void> {
   switch (analysis.ok) {
     case false:
       console.log(`[mbook] analysis skipped for ${path}: ${analysis.error.kind}`)
+      emitEvent("evt:diagnostics", { path, items: [] })
       return
     case true:
       break
   }
+
+  // The compiler asks: stream the notes to the editor even when the store
+  // skips an unchanged book — the renderer may have just reopened it.
+  emitEvent("evt:diagnostics", {
+    path,
+    items: analysis.value.diagnostics.map((d) => ({
+      kind: d.kind,
+      from: d.charFrom,
+      to: d.charTo,
+      detail: d.detail,
+    })),
+  })
 
   const opened = await loadStore(dbPath())
 

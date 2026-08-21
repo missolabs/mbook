@@ -14,6 +14,7 @@ import { createTypingAids } from "./aids-extension"
 import { pageJointsField } from "./page-breaks"
 import { pageLayer } from "./page-layer"
 import { characterCompletions } from "./character-complete"
+import { diagnosticsExtension } from "./diagnostics"
 
 // The book page, in mdesign's tokens: a true A5 sheet (148mm trim, border-box,
 // so the soft edge marks sit exactly on the trim) centred in the host, on
@@ -147,6 +148,7 @@ export function createBookExtensions(): Extension[] {
     glyphPlugin,
     paragraphPlugin,
     createTypingAids(),
+    diagnosticsExtension(),
     // activateOnTyping so the list pops the instant `[` opens a binding; the
     // name is the whole row, so the icon column is suppressed.
     autocompletion({

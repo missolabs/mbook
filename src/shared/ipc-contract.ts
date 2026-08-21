@@ -100,6 +100,19 @@ export type ChannelResponse<C extends ChannelName> = z.infer<
 // ---------------------------------------------------------------------------
 
 export const eventPayload = {
+  // The compiler asks: the analyzer's diagnostics for a book, with
+  // doc-absolute character ranges the editor can underline.
+  "evt:diagnostics": z.object({
+    path: z.string(),
+    items: z.array(
+      z.object({
+        kind: z.string(),
+        from: z.number(),
+        to: z.number(),
+        detail: z.string(),
+      }),
+    ),
+  }),
   "evt:menu": z.discriminatedUnion("action", [
     z.object({ action: z.literal("new") }),
     z.object({ action: z.literal("open") }),
