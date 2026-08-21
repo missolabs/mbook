@@ -468,6 +468,32 @@ describe("authored time pins, declarations and the lint surface", () => {
 
     expect(analysis.diagnostics.some((d) => d.kind === "unresolved-pronoun" && d.detail === "Ela")).toBe(true)
   })
+
+  it("an authored glyph stands the pronoun lint down — empty brackets get their own note", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Daniela",
+      "---",
+      "",
+      "Vi Mizoguchi no mercado. {Ela}[] sorriu.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    // The author already acted: never re-flag the word, never invite a
+    // second wrap.
+    expect(analysis.diagnostics.filter((d) => d.kind === "unresolved-pronoun")).toEqual([])
+
+    const empty = analysis.diagnostics.filter((d) => d.kind === "empty-binding")
+
+    expect(empty.length).toBe(1)
+    expect(empty[0]!.detail).toBe("Ela")
+
+    // The range covers the WHOLE glyph, so the fix lands the caret inside.
+    const content = book
+    expect(content.slice(empty[0]!.charFrom, empty[0]!.charTo)).toBe("{Ela}[]")
+  })
 })
 
 describe("the timeline crosses paragraph breaks", () => {

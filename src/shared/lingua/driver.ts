@@ -149,6 +149,9 @@ export type DiagnosticKind =
   | "contested-token"
   | "unresolved-name"
   | "unresolved-pronoun"
+  // An authored alias whose brackets are empty (`{Ela}[]`): the author
+  // already acted — the remaining question is only WHO goes in the brackets.
+  | "empty-binding"
   | "unstitched-chapter"
 
 export type Diagnostic = {
@@ -265,6 +268,29 @@ function collectDiagnostics(
   }
 
   for (const slot of paragraphs) {
+    // Tokens already covered by an authored mention glyph: the author has
+    // acted there, so the pronoun lint stands down — an empty binding gets
+    // its OWN diagnostic below instead of re-flagging the word.
+    const covered = new Set<string>()
+
+    for (const anchored of slot.analysis.spans) {
+      const mention =
+        anchored.span.kind === "subject-mention" && anchored.anchor.kind === "in-sentence"
+
+      switch (mention) {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      const anchor = anchored.anchor as { sentence: number; tokens: readonly number[] }
+
+      for (const t of anchor.tokens) {
+        covered.add(`${anchor.sentence}:${t}`)
+      }
+    }
+
     slot.analysis.sentences.forEach((sentence, si) => {
       sentence.tokens.forEach((token, ti) => {
         switch (token.role) {
@@ -304,7 +330,7 @@ function collectDiagnostics(
             (l) => l.kind === "anaphora" && l.fromParagraph === slot.index && l.fromSentence === si && l.fromToken === ti,
           )
 
-        switch (linked) {
+        switch (linked || covered.has(`${si}:${ti}`)) {
           case true:
             return
           case false:
@@ -315,20 +341,40 @@ function collectDiagnostics(
     })
 
     for (const anchored of slot.analysis.spans) {
-      const named =
-        anchored.span.binding.kind === "unresolved" && anchored.anchor.kind === "in-sentence"
-
-      switch (named) {
+      switch (anchored.span.binding.kind === "unresolved" && anchored.anchor.kind === "in-sentence") {
         case false:
           continue
         case true:
+          break
+      }
+
+      const name = (anchored.span.binding as { name: string }).name
+      const sentence = (anchored.anchor as { sentence: number }).sentence
+      const token = (anchored.anchor as { tokens: readonly number[] }).tokens[0] ?? -1
+      const base = starts[slot.fromLine] ?? 0
+
+      switch (name.trim().length === 0) {
+        case true:
+          // `{Ela}[]` — the glyph exists, the brackets are empty. The range
+          // is the WHOLE glyph so the fix can land the caret inside it.
+          out.push({
+            kind: "empty-binding",
+            paragraph: slot.index,
+            sentence,
+            token,
+            detail: anchored.span.text,
+            charFrom: base + anchored.span.from,
+            charTo: base + anchored.span.to,
+          })
+          continue
+        case false:
           out.push({
             kind: "unresolved-name",
             paragraph: slot.index,
-            sentence: (anchored.anchor as { sentence: number }).sentence,
-            token: (anchored.anchor as { tokens: readonly number[] }).tokens[0] ?? -1,
-            detail: (anchored.span.binding as { name: string }).name,
-            ...spread(rangeOf(slot, (anchored.anchor as { sentence: number }).sentence, (anchored.anchor as { tokens: readonly number[] }).tokens[0] ?? -1)),
+            sentence,
+            token,
+            detail: name,
+            ...spread(rangeOf(slot, sentence, token)),
           })
           continue
       }

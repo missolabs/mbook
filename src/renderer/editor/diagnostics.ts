@@ -24,6 +24,11 @@ export type DiagnosticItem = {
 
 export const setDiagnostics = StateEffect.define<readonly DiagnosticItem[]>()
 
+// A fix was applied: its diagnostic leaves the field AT ONCE, in the same
+// transaction — Enter can never compound a stale note before the next
+// analysis streams a fresh set.
+const dismissDiagnostic = StateEffect.define<{ from: number; to: number }>()
+
 const items = StateField.define<readonly DiagnosticItem[]>({
   create() {
     return []
@@ -48,6 +53,16 @@ const items = StateField.define<readonly DiagnosticItem[]>({
         case true:
           next = effect.value
           break
+        case false:
+          break
+      }
+
+      switch (effect.is(dismissDiagnostic)) {
+        case true: {
+          const gone = effect.value as { from: number; to: number }
+          next = next.filter((item) => item.from !== gone.from || item.to !== gone.to)
+          break
+        }
         case false:
           break
       }
@@ -191,6 +206,8 @@ function titleOf(kind: string): string {
   switch (kind) {
     case "unresolved-pronoun":
       return "pronome sem dono"
+    case "empty-binding":
+      return "apelido vazio"
     case "unresolved-name":
       return "nome fora do elenco"
     case "unstitched-chapter":
@@ -204,6 +221,8 @@ function bodyOf(item: DiagnosticItem, word: string): string {
   switch (item.kind) {
     case "unresolved-pronoun":
       return `“${word}” não encontra antecedente. Fixar com um apelido:`
+    case "empty-binding":
+      return `“${item.detail}” está apelidado, mas os colchetes estão vazios. Escolher do elenco:`
     case "unresolved-name":
       return `“${item.detail}” não está no elenco. Declarar:`
     case "unstitched-chapter":
@@ -217,6 +236,8 @@ function fixOf(kind: string, word: string): string | null {
   switch (kind) {
     case "unresolved-pronoun":
       return `{${word}}[…]`
+    case "empty-binding":
+      return "[…]"
     case "unresolved-name":
       return `character: ${word}`
     case "unstitched-chapter":
@@ -239,17 +260,60 @@ function applyFix(view: EditorView): boolean {
       break
   }
 
+  const dismissed = dismissDiagnostic.of({ from: active!.from, to: active!.to })
+
   switch (active!.kind) {
     case "unresolved-pronoun": {
       const word = view.state.sliceDoc(active!.from, active!.to)
+
+      // IDEMPOTENT: a word already wearing its glyph (`{Ela}[` ahead) never
+      // wraps again — the caret just lands inside the existing brackets.
+      const before = view.state.sliceDoc(Math.max(0, active!.from - 1), active!.from)
+      const after = view.state.sliceDoc(active!.to, Math.min(view.state.doc.length, active!.to + 2))
+
+      switch (before === "{" && after === "}[") {
+        case true: {
+          view.dispatch({
+            selection: { anchor: active!.to + 2 },
+            effects: dismissed,
+            userEvent: "select",
+          })
+          startCompletion(view)
+          return true
+        }
+        case false:
+          break
+      }
+
       const insert = `{${word}}[]`
 
       view.dispatch({
         changes: { from: active!.from, to: active!.to, insert },
         selection: { anchor: active!.from + insert.length - 1 },
+        effects: dismissed,
         userEvent: "input.complete",
       })
 
+      startCompletion(view)
+      return true
+    }
+    case "empty-binding": {
+      // The glyph exists; land inside its brackets and offer the cast.
+      const raw = view.state.sliceDoc(active!.from, active!.to)
+      const open = raw.lastIndexOf("[")
+
+      switch (open < 0) {
+        case true:
+          return false
+        case false:
+          break
+      }
+
+      view.dispatch({
+        selection: { anchor: active!.from + open + 1 },
+        effects: dismissed,
+        userEvent: "select",
+      })
       startCompletion(view)
       return true
     }
@@ -265,6 +329,7 @@ function applyFix(view: EditorView): boolean {
 
       view.dispatch({
         changes: { from: close!, to: close!, insert: `character: ${detailOf(active!)}\n` },
+        effects: dismissed,
         userEvent: "input.complete",
       })
       return true
@@ -275,6 +340,7 @@ function applyFix(view: EditorView): boolean {
       view.dispatch({
         changes: { from: active!.from, to: active!.from, insert },
         selection: { anchor: active!.from + 2 },
+        effects: dismissed,
         userEvent: "input.complete",
       })
       return true
