@@ -272,7 +272,16 @@ export type SyntaxData = {
   focusParticles: string[]
   // Month names, for the calendar anchors the timeline extracts.
   monthNames: string[]
+  // The meronymy table: declared part-whole pairs bridging reference reads
+  // (`o carro ... O MOTOR` — the engine belongs to the car on stage).
+  // Compile-time world knowledge, reviewed and frozen like every other list.
+  meronymy: MeronymyPair[]
   verbFeats: VerbFeatMarks
+}
+
+export type MeronymyPair = {
+  whole: string
+  part: string
 }
 
 export type VerbClassHint = {

@@ -144,7 +144,10 @@ describe("pt-BR: sentence-initial capitalized common word falls back to the lemm
 
     expect(casa.pos).toBe("NOUN")
     expect(casa.lemma).toBe("casa")
-    expect(casa.provenance).toBe("lexicon")
+
+    // Noun and verb readings both survived every rule — the noun won on
+    // priority alone, and the pick says so.
+    expect(casa.provenance).toBe("contested")
   })
 })
 

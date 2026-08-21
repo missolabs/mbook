@@ -178,7 +178,13 @@ export type SyntaxData = {
   fragmentParticles: string[]
   focusParticles: string[]
   monthNames: string[]
+  meronymy: MeronymyPair[]
   verbFeats: VerbFeatMarks
+}
+
+export type MeronymyPair = {
+  whole: string
+  part: string
 }
 
 export type VerbClassHint = {

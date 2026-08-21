@@ -27,6 +27,11 @@ import type { SourceToken } from "./lexer"
 
 export type Provenance =
   | "lexicon"
+  // The pick fell through every evidence-backed rule to the bare priority
+  // order while the candidates spanned several parts of speech: a
+  // load-bearing GUESS, marked so downstream passes and diagnostics can
+  // treat it conservatively.
+  | "contested"
   | "closed-class"
   | "suffix-guess"
   | "shape-guess"
@@ -280,7 +285,7 @@ function knownTag(
 
   const chosen = disambiguate(candidates, prev, syntax)
 
-  return entryTag(token, chosen, "lexicon")
+  return entryTag(token, chosen.entry, chosen.contested ? "contested" : "lexicon")
 }
 
 function forcedTag(
@@ -414,7 +419,9 @@ const CONTEXT_RULES: readonly ContextRule[] = [
   { prev: "ADV", prefer: "ADJ", form: "any", person: "any", feat: "marked", bond: "any" },
 ]
 
-function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: SyntaxData): Entry {
+type Picked = { entry: Entry; contested: boolean }
+
+function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: SyntaxData): Picked {
   switch (prev.kind) {
     case "none":
       return priorityPick(candidates, syntax)
@@ -426,7 +433,7 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
 
   switch (agreeing.kind) {
     case "some":
-      return agreeing.value
+      return { entry: agreeing.value, contested: false }
     case "none":
       break
   }
@@ -444,7 +451,7 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
 
       switch (adjectives.length > 0) {
         case true:
-          return lemmaPick(adjectives, syntax)
+          return { entry: lemmaPick(adjectives, syntax), contested: false }
         case false:
           break
       }
@@ -467,7 +474,7 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
 
       switch (bare.length > 0) {
         case true:
-          return lemmaPick(bare, syntax)
+          return { entry: lemmaPick(bare, syntax), contested: false }
         case false:
           break
       }
@@ -520,7 +527,7 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
       case true:
         continue
       case false:
-        return lemmaPick(matches, syntax)
+        return { entry: lemmaPick(matches, syntax), contested: false }
     }
   }
 
@@ -674,7 +681,7 @@ const PRIORITY: readonly Pos[] = [
 // clauses on the verb (`Olho para o mar`) and English fronts its copula in
 // questions (`Was it a dream?`). The hint gate keeps this surgical — an
 // uncurated homograph (`Casa é boa`) still reads as the noun.
-function priorityPick(candidates: readonly Entry[], syntax: SyntaxData): Entry {
+function priorityPick(candidates: readonly Entry[], syntax: SyntaxData): Picked {
   const hinted = candidates.filter(
     (e) =>
       e.pos === "VERB" &&
@@ -684,7 +691,7 @@ function priorityPick(candidates: readonly Entry[], syntax: SyntaxData): Entry {
 
   switch (hinted.length > 0) {
     case true:
-      return lemmaPick(hinted, syntax)
+      return { entry: lemmaPick(hinted, syntax), contested: false }
     case false:
       break
   }
@@ -705,7 +712,11 @@ function priorityPick(candidates: readonly Entry[], syntax: SyntaxData): Entry {
     }
   }
 
-  return best
+  // Several parts of speech survived every rule: the winner is priority
+  // order alone, a guess worth flagging.
+  const classes = new Set(candidates.map((e) => e.pos))
+
+  return { entry: best, contested: classes.size >= 2 }
 }
 
 function closedClassPos(lower: string, closed: Closed): Optional<Pos> {

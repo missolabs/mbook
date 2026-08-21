@@ -46,6 +46,10 @@ export type DiscourseLinkKind =
   // A verbless polar fragment copies the previous verb: `Eu também.`,
   // `Daniela não.` — the NP does (or does not do) what was just done.
   | "fragment"
+  // Bridging reference: a definite PART resumes the WHOLE on stage — `o
+  // carro ... O MOTOR` links the engine to its car through the declared
+  // meronymy table.
+  | "bridging"
 
 export type DiscourseProvenance = "discourse"
 
@@ -124,8 +128,129 @@ export function linkDiscourse(input: DiscourseInput): readonly DiscourseLink[] {
   })
 
   linkCoreference(links, input)
+  linkBridging(links, input)
 
   return links
+}
+
+// Bridging, paragraph-local: a definite NP whose head is a declared PART of
+// some whole already on stage — and which was never introduced in its own
+// right (its own indefinite would make it plain coreference) — links to the
+// most recent mention of the whole.
+function linkBridging(links: DiscourseLink[], input: DiscourseInput): void {
+  const staged = new Map<string, Anchor>()
+  const introduced = new Set<string>()
+
+  input.sentences.forEach((sentence, si) => {
+    for (const chunk of sentence.chunks) {
+      switch (chunk.kind) {
+        case "NP":
+          break
+        case "VP":
+          continue
+        case "PP":
+          continue
+      }
+
+      const opener = sentence.tokens[chunk.from]!
+      const head = sentence.tokens[chunk.head]!
+
+      switch (head.role === "content" && head.tagged.pos === "NOUN") {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      const lemma = (head as { tagged: { lemma: string } }).tagged.lemma
+      const article = opener.role === "content" ? opener.tagged.token.text.toLowerCase() : ""
+
+      switch (input.syntax.indefiniteArticles.includes(article)) {
+        case true:
+          introduced.add(lemma)
+          break
+        case false:
+          break
+      }
+
+      const definite = input.syntax.definiteArticles.includes(article)
+      const alreadyLinked = hasLink(links, "coreference", si, chunk.head)
+
+      const bridgeable = definite && introduced.has(lemma) === false && alreadyLinked === false
+
+      switch (bridgeable) {
+        case false:
+          break
+        case true: {
+          const whole = mostRecentWhole(input, staged, lemma)
+
+          switch (whole.kind) {
+            case "none":
+              break
+            case "some":
+              links.push({
+                kind: "bridging",
+                fromSentence: si,
+                fromToken: chunk.head,
+                toSentence: whole.value.sentence,
+                toToken: whole.value.token,
+                provenance: "discourse",
+              })
+              break
+          }
+          break
+        }
+      }
+
+      // Every nominal mention takes the stage AFTER it was considered as a
+      // part — a whole cannot bridge to itself.
+      staged.set(lemma, { sentence: si, token: chunk.head })
+    }
+  })
+}
+
+// The most recently staged whole this part is declared under; several wholes
+// may claim the part (porta: casa, carro) and recency arbitrates.
+function mostRecentWhole(
+  input: DiscourseInput,
+  staged: ReadonlyMap<string, Anchor>,
+  part: string,
+): Optional<Anchor> {
+  let best: Optional<Anchor> = { kind: "none" }
+
+  for (const pair of input.syntax.meronymy) {
+    switch (pair.part === part) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const anchor = staged.get(pair.whole)
+
+    switch (anchor === undefined) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    const later =
+      best.kind === "none" ||
+      anchor!.sentence > (best as { value: Anchor }).value.sentence ||
+      (anchor!.sentence === (best as { value: Anchor }).value.sentence &&
+        anchor!.token > (best as { value: Anchor }).value.token)
+
+    switch (later) {
+      case true:
+        best = { kind: "some", value: anchor! }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
 }
 
 // A sentence-initial rhetorical connective asserts a relation to the
@@ -1126,6 +1251,15 @@ function subjectlessThirdVerbs(sentence: Sentence, syntax: SyntaxData): readonly
         continue
     }
 
+    // A contested verb reading is a guess, and a guess is not evidence of
+    // an elided subject.
+    switch (contestedAt(sentence, chunk.head)) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
     const feat = featAt(sentence, chunk.head)
     const finite = syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p))
     const thirdCompatible = feat.includes("3") || /[12]/.test(feat) === false
@@ -1267,6 +1401,13 @@ function objectlessTransitiveVerbs(sentence: Sentence, syntax: SyntaxData): read
         continue
     }
 
+    switch (contestedAt(sentence, chunk.head)) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
     const expects = expectsObject(lemmaAt(sentence, chunk.head), syntax.valency)
     const found = sentence.relations.some((r) => claimsObject(r, chunk.head))
 
@@ -1318,6 +1459,17 @@ function isPassiveParticiple(sentence: Sentence, head: number, syntax: SyntaxDat
       return false
     case false:
       return syntax.passiveAuxiliaries.includes(lemmaAt(sentence, chain!.head))
+  }
+}
+
+function contestedAt(sentence: Sentence, index: number): boolean {
+  const token = sentence.tokens[index]!
+
+  switch (token.role) {
+    case "punctuation":
+      return false
+    case "content":
+      return token.tagged.provenance === "contested"
   }
 }
 

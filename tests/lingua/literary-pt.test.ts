@@ -843,6 +843,38 @@ describe("discourse: pronouns find their people, articles their entities", () =>
     expect(link("O poço estava seco.", "coreference")).toEqual([])
   })
 
+  it("bridging: the part resumes the whole on stage", () => {
+    const text = "Havia um carro na rua. O motor ainda roncava."
+    const links = link(text, "bridging")
+
+    expect(links.length).toBe(1)
+    expect(word(text, links[0]!.toSentence, links[0]!.toToken)).toBe("carro")
+  })
+
+  it("a part with its own introduction is coreference, never bridging", () => {
+    const text = "Havia um motor na garagem. O motor roncava."
+
+    expect(link(text, "bridging")).toEqual([])
+    expect(link(text, "coreference").length).toBe(1)
+  })
+
+  it("no whole on stage, no bridge", () => {
+    expect(link("O motor roncava na rua.", "bridging")).toEqual([])
+  })
+
+  it("the name table's gender binds — and blocks", () => {
+    const bound = analyze("Vi Kirie no mercado. Ela sorriu.")
+    const links = bound.discourse.filter((d) => d.kind === "anaphora")
+
+    expect(links.length).toBe(1)
+    expect(word("Vi Kirie no mercado. Ela sorriu.", links[0]!.toSentence, links[0]!.toToken)).toBe("Kirie")
+
+    // A feminine pronoun never takes a masculine name anymore.
+    const blocked = analyze("Vi Mizoguchi no mercado. Ela sorriu.")
+
+    expect(blocked.discourse.filter((d) => d.kind === "anaphora")).toEqual([])
+  })
+
   it("the dictionary's diminutive lemma carries coreference — o gatinho IS o gato", () => {
     const text = "Havia um gato no quintal. O gatinho dormia."
     const links = link(text, "coreference")

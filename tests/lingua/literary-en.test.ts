@@ -527,6 +527,16 @@ describe("modals, reports and negatives in English", () => {
 
     expect(relation(sentence, "focus-of", "Only", "Kumiko")).toBeDefined()
   })
+
+  it("bridging crosses to the whole in English too", () => {
+    const analysis = analyze("There was a house on the hill. The door stood open.")
+    const links = analysis.discourse.filter((d) => d.kind === "bridging")
+
+    expect(links.length).toBe(1)
+
+    const to = analysis.sentences[links[0]!.toSentence]!.tokens[links[0]!.toToken]!
+    expect(to.role === "content" && to.tagged.token.text).toBe("house")
+  })
 })
 
 function edgeWordsOf(text: string) {

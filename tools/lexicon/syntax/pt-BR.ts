@@ -430,6 +430,32 @@ export const PT_BR_SYNTAX: SyntaxData = {
     "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
     "agosto", "setembro", "outubro", "novembro", "dezembro",
   ],
+  // The meronymy table — bridging's compile-time world knowledge, curated to
+  // the wholes literary prose puts on stage. A part may belong to several
+  // wholes; the most recent whole on stage wins.
+  meronymy: [
+    { whole: "casa", part: "porta" }, { whole: "casa", part: "janela" },
+    { whole: "casa", part: "quintal" }, { whole: "casa", part: "telhado" },
+    { whole: "casa", part: "parede" }, { whole: "casa", part: "cozinha" },
+    { whole: "casa", part: "sala" }, { whole: "casa", part: "quarto" },
+    { whole: "casa", part: "escada" }, { whole: "casa", part: "corredor" },
+    { whole: "carro", part: "motor" }, { whole: "carro", part: "porta" },
+    { whole: "carro", part: "volante" }, { whole: "carro", part: "roda" },
+    { whole: "carro", part: "farol" }, { whole: "carro", part: "banco" },
+    { whole: "bar", part: "balcão" }, { whole: "bar", part: "mesa" },
+    { whole: "corpo", part: "mão" }, { whole: "corpo", part: "olho" },
+    { whole: "corpo", part: "rosto" }, { whole: "corpo", part: "cabelo" },
+    { whole: "corpo", part: "braço" }, { whole: "corpo", part: "perna" },
+    { whole: "corpo", part: "coração" },
+    { whole: "árvore", part: "galho" }, { whole: "árvore", part: "folha" },
+    { whole: "árvore", part: "raiz" },
+    { whole: "cidade", part: "rua" }, { whole: "cidade", part: "praça" },
+    { whole: "cidade", part: "bairro" },
+    { whole: "livro", part: "página" }, { whole: "livro", part: "capa" },
+    { whole: "livro", part: "capítulo" },
+    { whole: "mar", part: "onda" },
+    { whole: "poço", part: "fundo" }, { whole: "poço", part: "borda" },
+  ],
   // DELAF tense letters: P/I/J/F/Q presente..mais-que-perfeito, C condicional,
   // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio;
   // G gerúndio (the progressive/manner chains: `estava correndo`, `saiu correndo`).

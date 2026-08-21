@@ -17,6 +17,7 @@ import { parseMoby } from "./sources/moby"
 import { parseVarcon } from "./sources/varcon"
 import { _internal as delafInternal } from "./sources/delaf"
 import { compoundEntries } from "./sources/compounds"
+import { nameEntries } from "./sources/names"
 import { EN_SYNTAX } from "./syntax/en"
 import { PT_BR_SYNTAX } from "./syntax/pt-BR"
 
@@ -120,7 +121,7 @@ function writeDict(dict: Dictionary, name: string): number {
 async function buildPtBr(): Promise<number> {
   await ensureDelafDic()
   process.stdout.write("parsing DELAF (pt-BR)\n")
-  const entries = [...(await streamDelaf(DELAF_DIC)), ...compoundEntries()]
+  const entries = [...(await streamDelaf(DELAF_DIC)), ...compoundEntries(), ...nameEntries()]
 
   const dict: Dictionary = {
     lang: "pt-BR",
@@ -143,13 +144,16 @@ async function buildEn(): Promise<number> {
   const moby = parseMoby(readFileSync(MOBY.file, "utf8"))
   const variants = parseVarcon(readFileSync(VARCON.file, "utf8"))
 
-  const merged = [...agid, ...moby].map((e) => ({
-    form: e.form,
-    lemma: e.lemma,
-    pos: e.pos,
-    feat: e.feat,
-    variant: variantOf(variants, e.form),
-  }))
+  const merged = [
+    ...[...agid, ...moby].map((e) => ({
+      form: e.form,
+      lemma: e.lemma,
+      pos: e.pos,
+      feat: e.feat,
+      variant: variantOf(variants, e.form),
+    })),
+    ...nameEntries(),
+  ]
 
   const dict: Dictionary = {
     lang: "en",

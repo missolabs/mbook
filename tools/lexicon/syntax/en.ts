@@ -354,6 +354,26 @@ export const EN_SYNTAX: SyntaxData = {
     "january", "february", "march", "april", "may", "june", "july",
     "august", "september", "october", "november", "december",
   ],
+  meronymy: [
+    { whole: "house", part: "door" }, { whole: "house", part: "window" },
+    { whole: "house", part: "garden" }, { whole: "house", part: "roof" },
+    { whole: "house", part: "wall" }, { whole: "house", part: "kitchen" },
+    { whole: "house", part: "room" }, { whole: "house", part: "stairs" },
+    { whole: "house", part: "hallway" },
+    { whole: "car", part: "engine" }, { whole: "car", part: "door" },
+    { whole: "car", part: "wheel" }, { whole: "car", part: "headlight" },
+    { whole: "body", part: "hand" }, { whole: "body", part: "eye" },
+    { whole: "body", part: "face" }, { whole: "body", part: "hair" },
+    { whole: "body", part: "arm" }, { whole: "body", part: "leg" },
+    { whole: "body", part: "heart" },
+    { whole: "tree", part: "branch" }, { whole: "tree", part: "leaf" },
+    { whole: "tree", part: "root" },
+    { whole: "city", part: "street" }, { whole: "city", part: "square" },
+    { whole: "book", part: "page" }, { whole: "book", part: "cover" },
+    { whole: "book", part: "chapter" },
+    { whole: "sea", part: "wave" },
+    { whole: "well", part: "bottom" }, { whole: "well", part: "rim" },
+  ],
   // AGID/Moby codes: PAST, 3SG and FIN are finite ("PAST" also prefixes
   // PASTPART — an accepted over-match, since a participle-only homograph with a
   // noun reading is vanishingly rare). The English infinitive is the bare base
