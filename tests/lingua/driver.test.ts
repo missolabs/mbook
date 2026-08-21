@@ -530,6 +530,94 @@ describe("split antecedents stand the pronoun lint down", () => {
   })
 })
 
+describe("the first-person voice is book-global", () => {
+  it("unglyphed first-person verbs link to the voice — even cataphorically", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Narrador",
+      "character: Rei",
+      "---",
+      "",
+      "Decidi escrever um conto. Participei de um concurso.",
+      "",
+      "Nas tardes livres {eu}[Narrador] puxava o caderno.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+    const voice = analysis.bookLinks.filter((l) => l.kind === "elided-subject" && l.fromParagraph === 0)
+
+    // Both bare first-person verbs of the FIRST paragraph anchor forward to
+    // the voice's mention in the second.
+    expect(voice.length).toBe(2)
+    expect(voice.every((l) => l.toParagraph === 1)).toBe(true)
+  })
+
+  it("two declared voices stand the pass down — no guessing between eus", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: A",
+      "character: B",
+      "---",
+      "",
+      "Decidi escrever.",
+      "",
+      "{eu}[A] segui. {eu}[B] parei.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.bookLinks.filter((l) => l.kind === "elided-subject" && l.fromParagraph === 0)).toEqual([])
+  })
+
+  it("speech stays out — a spoken eu belongs to its speaker, not the voice", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Narrador",
+      "character: Rei",
+      "---",
+      "",
+      "{eu}[Narrador] cheguei cedo.",
+      "",
+      "—[Rei] Decidi vender o bar.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.bookLinks.filter((l) => l.kind === "elided-subject" && l.fromParagraph === 1)).toEqual([])
+  })
+})
+
+describe("causal timeline edges", () => {
+  it("a consequence marker becomes a causes edge — predecessor's event to the marker sentence's", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "@[Rei] derrubou o copo. Portanto o dono cobrou a garrafa.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+    const causes = analysis.timelineEdges.filter((e) => e.kind === "causes")
+
+    expect(causes.length).toBe(1)
+    expect(causes[0]!.fromSentence).toBe(0)
+    expect(causes[0]!.toSentence).toBe(1)
+  })
+
+  it("no marker, no causal claim", () => {
+    const book = ["---", "language: pt-BR", "character: Rei", "---", "", "@[Rei] derrubou o copo. O dono cobrou a garrafa."].join(
+      "\n",
+    )
+
+    expect(analyze(book, BOTH).timelineEdges.filter((e) => e.kind === "causes")).toEqual([])
+  })
+})
+
 describe("multi-name bindings", () => {
   it("a group glyph stands the lint down and pins the subject", () => {
     const book = [

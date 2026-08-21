@@ -47,7 +47,11 @@ export type TimelineEvent = {
   aspect: string
 }
 
-export type TimelineEdgeKind = "before" | "meets" | "during" | "overlaps"
+// `causes` is the rhetorical edge: a consequence marker (`portanto`, `então`)
+// asserts its sentence's events FOLLOW FROM the predecessor's — the one edge
+// that carries WHY, not just WHEN. The driver derives it from the discourse
+// pass's consequence links.
+export type TimelineEdgeKind = "before" | "meets" | "during" | "overlaps" | "causes"
 
 export type TimelineProvenance =
   // An authored `~[...]` time pin ordered these events — the strongest edge.

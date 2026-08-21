@@ -28,7 +28,7 @@ import type { Result } from "../result"
 import { analyzeParagraph } from "./pipeline"
 import type { ParagraphAnalysis, Sentence } from "./pipeline"
 import { linkAcrossParagraphs } from "./dataflow"
-import type { DiscourseLinkKind, DiscourseProvenance } from "./dataflow"
+import type { DiscourseLink, DiscourseLinkKind, DiscourseProvenance } from "./dataflow"
 import type { TimelineEdgeKind, TimelineEvent, TimelineProvenance } from "./timeline"
 import { readLanguage } from "./language"
 import type { Language } from "./language"
@@ -214,7 +214,8 @@ export function analyzeBook(
 
   const aliases = collectAliases(paragraphs, cast)
   const declarations = buildDeclarations(doc)
-  const bookLinks = crossParagraphLinks(paragraphs, lexicon.value)
+  const crossLinks = crossParagraphLinks(paragraphs, lexicon.value)
+  const bookLinks = [...crossLinks, ...voiceLinks(paragraphs, lexicon.value, crossLinks)]
 
   return ok({
     language,
@@ -225,7 +226,7 @@ export function analyzeBook(
     unresolved: unresolvedNames(spans),
     bookLinks,
     entities: nameEntities(paragraphs, cast, lexicon.value, declarations),
-    timelineEdges: stitchTimelines(paragraphs),
+    timelineEdges: [...stitchTimelines(paragraphs), ...causalEdges(paragraphs)],
     aliases,
     aliasMentions: resolveAliasMentions(paragraphs, aliases, lexicon.value),
     turnGuesses: guessTurns(paragraphs, cast),
@@ -716,6 +717,274 @@ function nearestAttributed(
 // The narrative chain over block boundaries: adjacent paragraphs' perfective
 // anchors join with a before-edge — the same advancement rule, one level up.
 // A CHAPTER break is a legitimate time jump and never auto-stitches.
+// ─── the first-person voice ──────────────────────────────────────────────────
+// The narrating `eu` is BOOK-GLOBAL: when every first-person display glyph in
+// the book ({eu}[Narrador], {Eu}[X]) binds the same character, that character
+// IS the voice, and every unclaimed first-person finite verb in narration
+// links to it — chapters written before the first glyph included (the anchor
+// is then cataphoric, pointing at the voice's first mention). Two different
+// voices declared anywhere and the pass stands down entirely: a book with two
+// narrating "eu"s keeps its per-paragraph proximity rule alone.
+type VoiceMention = { slug: string; paragraph: number; sentence: number; token: number }
+
+function voiceLinks(
+  paragraphs: readonly ParagraphSlot[],
+  lexicon: Lexicon,
+  claimed: readonly BookLink[],
+): readonly BookLink[] {
+  const mentions = firstPersonMentions(paragraphs, lexicon)
+  const slugs = new Set(mentions.map((m) => m.slug))
+
+  switch (mentions.length === 0 || slugs.size !== 1) {
+    case true:
+      return []
+    case false:
+      break
+  }
+
+  const links: BookLink[] = []
+
+  for (const slot of paragraphs) {
+    slot.analysis.sentences.forEach((sentence, si) => {
+      switch (sentence.attribution.kind) {
+        case "narration":
+          break
+        case "speech":
+        case "written":
+          return
+      }
+
+      for (const chunk of sentence.chunks) {
+        switch (chunk.kind) {
+          case "VP":
+            break
+          case "NP":
+          case "PP":
+            continue
+        }
+
+        switch (unclaimedFirstPerson(sentence, chunk.head, lexicon)) {
+          case false:
+            continue
+          case true:
+            break
+        }
+
+        switch (
+          hasElidedSubject(slot.analysis.discourse, si, chunk.head) ||
+          hasBookElidedSubject(claimed, slot.index, si, chunk.head)
+        ) {
+          case true:
+            continue
+          case false:
+            break
+        }
+
+        const anchor = voiceAnchorFor(mentions, slot.index, si)
+
+        links.push({
+          kind: "elided-subject",
+          fromParagraph: slot.index,
+          fromSentence: si,
+          fromToken: chunk.head,
+          toParagraph: anchor.paragraph,
+          toSentence: anchor.sentence,
+          toToken: anchor.token,
+          provenance: "discourse",
+        })
+      }
+    })
+  }
+
+  return links
+}
+
+function firstPersonMentions(paragraphs: readonly ParagraphSlot[], lexicon: Lexicon): readonly VoiceMention[] {
+  const out: VoiceMention[] = []
+
+  for (const slot of paragraphs) {
+    for (const anchored of slot.analysis.spans) {
+      const span = anchored.span
+
+      const qualifies =
+        span.kind === "subject-mention" && span.binding.kind === "resolved" && anchored.anchor.kind === "in-sentence"
+
+      switch (qualifies) {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      const lead = span.text.trim().split(/\s+/)[0] ?? ""
+
+      switch (firstPersonWord(lead, lexicon)) {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      const anchor = anchored.anchor as { sentence: number; tokens: readonly number[] }
+
+      out.push({
+        slug: (span.binding as { slug: string }).slug,
+        paragraph: slot.index,
+        sentence: anchor.sentence,
+        token: anchor.tokens[0] ?? 0,
+      })
+    }
+  }
+
+  return out
+}
+
+// `eu`/`me` by their PRON first-person feat — or the bare English `I`, whose
+// dictionary entry carries no feats at all.
+function firstPersonWord(word: string, lexicon: Lexicon): boolean {
+  const lower = word.toLowerCase()
+
+  switch (lower === "i") {
+    case true:
+      return true
+    case false:
+      break
+  }
+
+  for (const entry of lexicon.lookup(lower, { kind: "all" })) {
+    switch (entry.pos === "PRON" && entry.feat.includes("1")) {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  return false
+}
+
+// A finite first-person verb the binder pinned no subject on.
+function unclaimedFirstPerson(sentence: Sentence, head: number, lexicon: Lexicon): boolean {
+  const token = sentence.tokens[head]
+
+  switch (token === undefined || token!.role === "punctuation") {
+    case true:
+      return false
+    case false:
+      break
+  }
+
+  const feat = (token! as { tagged: { feat: string } }).tagged.feat
+
+  const firstPerson =
+    lexicon.syntax.verbFeats.finitePrefixes.some((p) => feat.startsWith(p)) && feat.includes("1")
+
+  switch (firstPerson) {
+    case false:
+      return false
+    case true:
+      break
+  }
+
+  return sentence.relations.some((r) => r.kind === "subject-of" && r.head === head) === false
+}
+
+function hasElidedSubject(links: readonly DiscourseLink[], si: number, ti: number): boolean {
+  return links.some((l) => l.kind === "elided-subject" && l.fromSentence === si && l.fromToken === ti)
+}
+
+function hasBookElidedSubject(links: readonly BookLink[], p: number, si: number, ti: number): boolean {
+  return links.some(
+    (l) => l.kind === "elided-subject" && l.fromParagraph === p && l.fromSentence === si && l.fromToken === ti,
+  )
+}
+
+// The voice's nearest preceding mention — or its first mention, for verbs
+// narrated before the voice ever wears a glyph.
+function voiceAnchorFor(mentions: readonly VoiceMention[], paragraph: number, sentence: number): VoiceMention {
+  let best: VoiceMention | null = null
+
+  for (const mention of mentions) {
+    const precedes =
+      mention.paragraph < paragraph || (mention.paragraph === paragraph && mention.sentence <= sentence)
+
+    switch (precedes) {
+      case false:
+        continue
+      case true:
+        best = mention
+        continue
+    }
+  }
+
+  return best ?? mentions[0]!
+}
+
+// ─── causal edges ────────────────────────────────────────────────────────────
+// The discourse pass already reads consequence markers (`portanto`, `então`);
+// each such link becomes a timeline edge: the predecessor sentence's LAST
+// event causes the marker sentence's FIRST. The one edge that answers WHY.
+function causalEdges(paragraphs: readonly ParagraphSlot[]): readonly BookTimelineEdge[] {
+  const out: BookTimelineEdge[] = []
+
+  for (const slot of paragraphs) {
+    for (const link of slot.analysis.discourse) {
+      switch (link.kind) {
+        case "consequence":
+          break
+        default:
+          continue
+      }
+
+      const cause = lastEventOf(slot, link.toSentence)
+      const effect = firstEventOf(slot, link.fromSentence)
+
+      switch (cause.kind === "some" && effect.kind === "some") {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      out.push({
+        kind: "causes",
+        fromParagraph: slot.index,
+        fromSentence: link.toSentence,
+        fromToken: (cause as { value: TimelineEvent }).value.token,
+        toParagraph: slot.index,
+        toSentence: link.fromSentence,
+        toToken: (effect as { value: TimelineEvent }).value.token,
+        provenance: "connective",
+      })
+    }
+  }
+
+  return out
+}
+
+function lastEventOf(slot: ParagraphSlot, sentence: number): Optional<TimelineEvent> {
+  const events = slot.analysis.timeline.events.filter((e) => e.sentence === sentence)
+  const last = events[events.length - 1]
+
+  switch (last === undefined) {
+    case true:
+      return { kind: "none" }
+    case false:
+      return { kind: "some", value: last! }
+  }
+}
+
+function firstEventOf(slot: ParagraphSlot, sentence: number): Optional<TimelineEvent> {
+  const first = slot.analysis.timeline.events.find((e) => e.sentence === sentence)
+
+  switch (first === undefined) {
+    case true:
+      return { kind: "none" }
+    case false:
+      return { kind: "some", value: first! }
+  }
+}
+
 function stitchTimelines(paragraphs: readonly ParagraphSlot[]): readonly BookTimelineEdge[] {
   const out: BookTimelineEdge[] = []
 
