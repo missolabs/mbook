@@ -39,6 +39,10 @@ export type DiscourseLinkKind =
   // Definiteness chains: `um poço` introduces an entity, a later `o poço`
   // resumes it — the definite NP links back to its introduction.
   | "coreference"
+  // Rhetorical connectives: a sentence opening on `mas`/`but` CONTRASTS with
+  // its predecessor, on `portanto`/`so` follows from it.
+  | "contrast"
+  | "consequence"
 
 export type DiscourseProvenance = "discourse"
 
@@ -107,11 +111,64 @@ export function linkDiscourse(input: DiscourseInput): readonly DiscourseLink[] {
 
     linkAnaphors(links, input, si)
     linkFirstPerson(links, input, si)
+    linkRhetorical(links, input, si)
   })
 
   linkCoreference(links, input)
 
   return links
+}
+
+// A sentence-initial rhetorical connective asserts a relation to the
+// PREVIOUS sentence: contrast (`Mas...`) or consequence (`Portanto...`).
+// The link runs from the marker token to the previous sentence's first verb.
+function linkRhetorical(links: DiscourseLink[], input: DiscourseInput, si: number): void {
+  switch (si === 0) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const sentence = input.sentences[si]!
+
+  for (const [ti, token] of sentence.tokens.entries()) {
+    switch (token.role) {
+      case "punctuation":
+        continue
+      case "content":
+        break
+    }
+
+    const marker = input.syntax.discourseMarkers.find(
+      (m) => m.form === token.tagged.token.text.toLowerCase(),
+    )
+
+    switch (marker === undefined) {
+      case true:
+        return
+      case false:
+        break
+    }
+
+    const previous = input.sentences[si - 1]!
+    const anchor = previous.chunks.find((c) => c.kind === "VP")
+
+    switch (anchor === undefined) {
+      case true:
+        return
+      case false:
+        links.push({
+          kind: marker!.sense,
+          fromSentence: si,
+          fromToken: ti,
+          toSentence: si - 1,
+          toToken: anchor!.head,
+          provenance: "discourse",
+        })
+        return
+    }
+  }
 }
 
 // ─── anaphora ────────────────────────────────────────────────────────────────
@@ -159,6 +216,19 @@ function linkAnaphors(links: DiscourseLink[], input: DiscourseInput, si: number)
         switch (antecedent.kind) {
           case "some":
             links.push(anaphoraLink(si, ti, antecedent.value))
+            return
+          case "none":
+            break
+        }
+
+        // CATAPHORA: a pronoun with nothing behind it may point forward to
+        // its own sentence's matrix subject — `Quando ELA chegou, Daniela
+        // sorriu`.
+        const forward = resolveForward(input, si, ti, hint!.feat)
+
+        switch (forward.kind) {
+          case "some":
+            links.push(anaphoraLink(si, ti, forward.value))
             return
           case "none":
             return
@@ -217,6 +287,90 @@ function resolveAgreeing(input: DiscourseInput, si: number, ti: number, feat: st
             continue
         }
       }
+    }
+
+    // A PLURAL pronoun may take a coordinated pair as its antecedent: `Rei e
+    // Daniela chegaram. ELES riam.` — the pair matches where no single
+    // nominal can; the anchor is the pair's first conjunct.
+    switch (feat.length > 1 && feat[1] === "p") {
+      case true: {
+        const pair = coordinatedPair(sentence, limit)
+
+        switch (pair.kind) {
+          case "some":
+            return { kind: "some", value: { sentence: sj, token: pair.value } }
+          case "none":
+            break
+        }
+        break
+      }
+      case false:
+        break
+    }
+  }
+
+  return { kind: "none" }
+}
+
+// The last `NP CONJ NP` chain before `limit`, as its first conjunct's head.
+function coordinatedPair(sentence: Sentence, limit: number): Optional<number> {
+  let best: Optional<number> = { kind: "none" }
+
+  for (let k = 0; k + 1 < sentence.chunks.length; k++) {
+    const a = sentence.chunks[k]!
+    const b = sentence.chunks[k + 1]!
+
+    const chained =
+      a.kind === "NP" &&
+      b.kind === "NP" &&
+      b.from === a.to + 1 &&
+      b.to <= limit &&
+      isConjToken(sentence, a.to) &&
+      nominalHead(sentence, a.head) &&
+      nominalHead(sentence, b.head)
+
+    switch (chained) {
+      case true:
+        best = { kind: "some", value: a.head }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
+}
+
+function isConjToken(sentence: Sentence, at: number): boolean {
+  const token = sentence.tokens[at]
+
+  switch (token === undefined) {
+    case true:
+      return false
+    case false:
+      break
+  }
+
+  switch (token!.role) {
+    case "punctuation":
+      return false
+    case "content":
+      return token!.tagged.pos === "CONJ"
+  }
+}
+
+// The forward search cataphora uses: an agreeing SUBJECT after the pronoun
+// in the same sentence — the matrix clause's, by the grammar of fronted
+// subordinates.
+function resolveForward(input: DiscourseInput, si: number, ti: number, feat: string): Optional<Anchor> {
+  const sentence = input.sentences[si]!
+
+  for (let at = ti + 1; at < sentence.tokens.length; at++) {
+    switch (subjectTier(sentence, at) && agrees(sentence, at, feat)) {
+      case true:
+        return { kind: "some", value: { sentence: si, token: at } }
+      case false:
+        continue
     }
   }
 
@@ -655,6 +809,52 @@ export function linkAcrossParagraphs(
     }
   }
 
+  // Definiteness chains continue over the break: an entity the previous
+  // paragraph introduced with an indefinite is resumed by the new
+  // paragraph's opening definite NP.
+  for (const chunk of first!.chunks) {
+    switch (chunk.kind === "NP") {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const opener = first!.tokens[chunk.from]!
+    const head = first!.tokens[chunk.head]!
+
+    const definite =
+      opener.role === "content" &&
+      head.role === "content" &&
+      head.tagged.pos === "NOUN" &&
+      curr.syntax.definiteArticles.includes(opener.tagged.token.text.toLowerCase())
+
+    switch (definite && taken("coreference", 0, chunk.head) === false) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const lemma = (head as { tagged: { lemma: string } }).tagged.lemma
+    const introduced = lastIntroduction(prev, lemma)
+
+    switch (introduced.kind) {
+      case "none":
+        continue
+      case "some":
+        links.push({
+          kind: "coreference",
+          fromSentence: 0,
+          fromToken: chunk.head,
+          toSentence: introduced.value.sentence,
+          toToken: introduced.value.token,
+          provenance: "discourse",
+        })
+        continue
+    }
+  }
+
   first!.tokens.forEach((token, ti) => {
     switch (token.role) {
       case "punctuation":
@@ -750,6 +950,43 @@ function hasLink(all: readonly DiscourseLink[], kind: DiscourseLinkKind, si: num
   return all.some((l) => l.kind === kind && l.fromSentence === si && l.fromToken === ti)
 }
 
+// The last indefinite-introduced NP with this head lemma anywhere in the
+// previous paragraph.
+function lastIntroduction(prev: DiscourseInput, lemma: string): Optional<Anchor> {
+  let best: Optional<Anchor> = { kind: "none" }
+
+  prev.sentences.forEach((sentence, si) => {
+    for (const chunk of sentence.chunks) {
+      switch (chunk.kind === "NP") {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      const opener = sentence.tokens[chunk.from]!
+      const head = sentence.tokens[chunk.head]!
+
+      const introduces =
+        opener.role === "content" &&
+        head.role === "content" &&
+        head.tagged.pos === "NOUN" &&
+        head.tagged.lemma === lemma &&
+        prev.syntax.indefiniteArticles.includes(opener.tagged.token.text.toLowerCase())
+
+      switch (introduces) {
+        case true:
+          best = { kind: "some", value: { sentence: si, token: chunk.head } }
+          continue
+        case false:
+          continue
+      }
+    }
+  })
+
+  return best
+}
+
 // The previous paragraph's freshest referent: its last sentence's last
 // object, else subject, walking backward.
 function crossAntecedent(prev: DiscourseInput): Optional<Anchor> {
@@ -823,6 +1060,15 @@ function subjectlessThirdVerbs(sentence: Sentence, syntax: SyntaxData): readonly
     }
 
     switch (impersonalFrame(lemmaAt(sentence, chunk.head), syntax.valency)) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    // Meteorological verbs are impersonal: `Rei chegou. Chovia.` continues
+    // no one — Rei does not rain.
+    switch (syntax.weatherVerbs.includes(lemmaAt(sentence, chunk.head))) {
       case true:
         continue
       case false:
@@ -1056,6 +1302,18 @@ function claimsObject(relation: Relation, head: number): boolean {
     case "adverbial-of":
       return false
     case "light-verb-of":
+      return false
+    case "advmod-of":
+      return false
+    case "degree-of":
+      return false
+    case "predicative-of":
+      return false
+    case "role-of":
+      return false
+    case "purpose-of":
+      return false
+    case "duration-of":
       return false
   }
 }

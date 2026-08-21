@@ -85,13 +85,14 @@ export type BookTimelineEdge = {
 
 // A proper name outside the cast, typed by ORDERED evidence — strongest rule
 // that fires wins, and nothing firing stays honestly unknown:
-//   1. person — the name SAYS something (subject of a dicendi verb) or is
-//      ADDRESSED (vocative);
-//   2. place — a typed head noun claims it by grammar (`a cidade de S`,
-//      appositive `S, uma cidade fria`);
+//   1. person — the name SAYS something (subject of a dicendi verb), is
+//      ADDRESSED (vocative), or wears an honorific title (Sr. Tanabe);
+//   2. typed — a declared head noun claims it by grammar, with its kind:
+//      `a cidade de S` place, `o gato Hellmanns` animal, `a banda X`
+//      organization, `o detetive Y` person;
 //   3. place — a locative adposition governs it (`no B Bar`), unless the
 //      mention sits inside quote marks (a quoted title names no geography).
-export type EntityKind = "person" | "place" | "unknown"
+export type EntityKind = "person" | "animal" | "organization" | "place" | "unknown"
 
 export type NamedEntity = {
   name: string
@@ -108,6 +109,23 @@ export type BookAnalysis = {
   bookLinks: readonly BookLink[]
   entities: readonly NamedEntity[]
   timelineEdges: readonly BookTimelineEdge[]
+  // Descriptions the text itself equates with cast members (`Rei, o
+  // detetive` / `o detetive Rei`) — the alias registry definite descriptions
+  // resolve through.
+  aliases: readonly CharacterAlias[]
+  // Unattributed dialogue turns guessed by ALTERNATION: in a run between
+  // exactly two attributed speakers, consecutive turns alternate.
+  turnGuesses: readonly TurnGuess[]
+}
+
+export type CharacterAlias = {
+  slug: string
+  description: string
+}
+
+export type TurnGuess = {
+  paragraph: number
+  slug: string
 }
 
 export type BookAnalysisError = { kind: "lexicon-unavailable"; language: Language }
@@ -151,17 +169,207 @@ export function analyzeBook(
     bookLinks: crossParagraphLinks(paragraphs, lexicon.value),
     entities: nameEntities(paragraphs, cast, lexicon.value),
     timelineEdges: stitchTimelines(paragraphs),
+    aliases: collectAliases(paragraphs, cast),
+    turnGuesses: guessTurns(paragraphs, cast),
   })
+}
+
+// Appositives whose NAME side is a cast member register the description as
+// an alias: `Rei, o detetive` and `o detetive Rei` both put "detetive" in
+// Rei's registry.
+function collectAliases(paragraphs: readonly ParagraphSlot[], cast: Cast): readonly CharacterAlias[] {
+  const names = new Map(cast.characters.map((c) => [c.name, c.slug]))
+  const seen = new Set<string>()
+  const out: CharacterAlias[] = []
+
+  for (const slot of paragraphs) {
+    for (const sentence of slot.analysis.sentences) {
+      for (const r of sentence.relations) {
+        switch (r.kind === "appositive-of") {
+          case false:
+            continue
+          case true:
+            break
+        }
+
+        const name = wordExact(sentence, r.head)
+        const slug = name === null ? undefined : names.get(name)
+
+        switch (slug === undefined) {
+          case true:
+            continue
+          case false:
+            break
+        }
+
+        const description = lemmaOf(sentence, r.dependent)
+        const key = `${slug} ${description}`
+
+        switch (description.length === 0 || seen.has(key)) {
+          case true:
+            continue
+          case false:
+            seen.add(key)
+            out.push({ slug: slug!, description })
+            continue
+        }
+      }
+    }
+  }
+
+  return out
+}
+
+function wordExact(sentence: Sentence, index: number): string | null {
+  const token = sentence.tokens[index]
+
+  switch (token === undefined) {
+    case true:
+      return null
+    case false:
+      break
+  }
+
+  switch (token!.role) {
+    case "content":
+      return token!.tagged.token.text
+    case "punctuation":
+      return null
+  }
+}
+
+// Dialogue alternation: within a run of consecutive speech paragraphs whose
+// attributed speakers are EXACTLY two people, an unattributed turn takes the
+// speaker its distance-parity from the nearest attributed turn implies —
+// adjacent turns alternate.
+function guessTurns(paragraphs: readonly ParagraphSlot[], cast: Cast): readonly TurnGuess[] {
+  const out: TurnGuess[] = []
+
+  let run: { index: number; slug: string | null }[] = []
+
+  const close = (): void => {
+    const attributed = run.filter((t) => t.slug !== null).map((t) => t.slug!)
+    let distinct = [...new Set(attributed)]
+
+    // One attributed speaker and a TWO-member cast still pins the dialogue:
+    // the other voice can only be the other character.
+    switch (distinct.length === 1 && cast.characters.length === 2) {
+      case true: {
+        const other = cast.characters.find((c) => c.slug !== distinct[0])
+
+        switch (other === undefined) {
+          case true:
+            break
+          case false:
+            distinct = [distinct[0]!, other!.slug]
+            break
+        }
+        break
+      }
+      case false:
+        break
+    }
+
+    switch (distinct.length === 2) {
+      case false:
+        run = []
+        return
+      case true:
+        break
+    }
+
+    run.forEach((turn, i) => {
+      switch (turn.slug === null) {
+        case false:
+          return
+        case true:
+          break
+      }
+
+      const anchor = nearestAttributed(run, i)
+
+      switch (anchor.kind) {
+        case "none":
+          return
+        case "some": {
+          const { slug, distance } = anchor.value
+          const other = distinct[0] === slug ? distinct[1]! : distinct[0]!
+
+          out.push({ paragraph: turn.index, slug: distance % 2 === 1 ? other : slug })
+          return
+        }
+      }
+    })
+
+    run = []
+  }
+
+  for (const slot of paragraphs) {
+    const first = slot.analysis.sentences[0]
+
+    const speech = first !== undefined && first.attribution.kind === "speech"
+
+    switch (speech) {
+      case false:
+        close()
+        continue
+      case true:
+        break
+    }
+
+    const attribution = first!.attribution as { kind: "speech"; speaker: { kind: string; slug?: string } }
+    const slug = attribution.speaker.kind === "slug" ? attribution.speaker.slug! : null
+
+    run.push({ index: slot.index, slug })
+  }
+
+  close()
+
+  return out
+}
+
+function nearestAttributed(
+  run: readonly { slug: string | null }[],
+  i: number,
+): Optional<{ slug: string; distance: number }> {
+  for (let d = 1; d < run.length; d++) {
+    const before = run[i - d]
+    const after = run[i + d]
+
+    switch (before !== undefined && before!.slug !== null) {
+      case true:
+        return { kind: "some", value: { slug: before!.slug!, distance: d } }
+      case false:
+        break
+    }
+
+    switch (after !== undefined && after!.slug !== null) {
+      case true:
+        return { kind: "some", value: { slug: after!.slug!, distance: d } }
+      case false:
+        continue
+    }
+  }
+
+  return { kind: "none" }
 }
 
 // The narrative chain over block boundaries: adjacent paragraphs' perfective
 // anchors join with a before-edge — the same advancement rule, one level up.
+// A CHAPTER break is a legitimate time jump and never auto-stitches.
 function stitchTimelines(paragraphs: readonly ParagraphSlot[]): readonly BookTimelineEdge[] {
   const out: BookTimelineEdge[] = []
 
   for (let i = 1; i < paragraphs.length; i++) {
     const prev = paragraphs[i - 1]!
     const curr = paragraphs[i]!
+
+    switch (sameChapter(prev, curr)) {
+      case false:
+        continue
+      case true:
+        break
+    }
 
     const from = lastPerfective(prev.analysis.timeline.events)
     const to = firstPerfective(curr.analysis.timeline.events)
@@ -189,6 +397,28 @@ function stitchTimelines(paragraphs: readonly ParagraphSlot[]): readonly BookTim
   }
 
   return out
+}
+
+function sameChapter(a: ParagraphSlot, b: ParagraphSlot): boolean {
+  return chapterIndexOf(a) === chapterIndexOf(b)
+}
+
+function chapterIndexOf(slot: ParagraphSlot): number {
+  const location = slot.locations[0]
+
+  switch (location === undefined) {
+    case true:
+      return -1
+    case false:
+      break
+  }
+
+  switch (location!.chapter.kind) {
+    case "none":
+      return -1
+    case "some":
+      return location!.chapter.value.index
+  }
 }
 
 function firstPerfective(events: readonly TimelineEvent[]): Optional<TimelineEvent> {
@@ -224,7 +454,7 @@ function lastPerfective(events: readonly TimelineEvent[]): Optional<TimelineEven
 // mention contributes ORDERED evidence and the strongest kind ever seen
 // decides. Mentions inside quote marks contribute no evidence at all — a
 // quoted title names no one and no place.
-type EntityEvidence = { mentions: number; person: number; typedPlace: number; locative: number }
+type EntityEvidence = { mentions: number; person: number; typed: Map<EntityKind, number>; locative: number }
 
 function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon: Lexicon): readonly NamedEntity[] {
   const castNames = new Set(cast.characters.map((c) => c.name))
@@ -249,7 +479,15 @@ function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon:
             break
         }
 
-        const entry = tally.get(name.value) ?? { mentions: 0, person: 0, typedPlace: 0, locative: 0 }
+        // A bare honorific is not an entity — `Sr.` names no one on its own.
+        switch (lexicon.syntax.personTitles.some((t) => t === name.value)) {
+          case true:
+            continue
+          case false:
+            break
+        }
+
+        const entry = tally.get(name.value) ?? { mentions: 0, person: 0, typed: new Map<EntityKind, number>(), locative: 0 }
         entry.mentions += 1
 
         switch (insideQuotes(sentence, chunk.from)) {
@@ -261,7 +499,17 @@ function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon:
         }
 
         entry.person += personEvidence(sentence, chunk, lexicon.syntax) ? 1 : 0
-        entry.typedPlace += typedPlaceEvidence(sentence, chunk, lexicon.syntax) ? 1 : 0
+
+        const typed = typedKindEvidence(sentence, chunk, lexicon.syntax)
+
+        switch (typed.kind) {
+          case "some":
+            entry.typed.set(typed.value, (entry.typed.get(typed.value) ?? 0) + 1)
+            break
+          case "none":
+            break
+        }
+
         entry.locative += locativeBefore(sentence, chunk, lexicon.syntax.locativeMarkers) ? 1 : 0
         tally.set(name.value, entry)
       }
@@ -278,7 +526,8 @@ function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon:
 }
 
 // Strict precedence, never a vote count: a name that SPEAKS is a person no
-// matter how often it is travelled to.
+// matter how often it is travelled to; among typed-head kinds the
+// most-attested one wins.
 function entityKind(entry: EntityEvidence): EntityKind {
   switch (entry.person > 0) {
     case true:
@@ -287,7 +536,28 @@ function entityKind(entry: EntityEvidence): EntityKind {
       break
   }
 
-  switch (entry.typedPlace > 0 || entry.locative > 0) {
+  let best: EntityKind = "unknown"
+  let bestCount = 0
+
+  for (const [kind, count] of entry.typed) {
+    switch (count > bestCount) {
+      case true:
+        best = kind
+        bestCount = count
+        break
+      case false:
+        break
+    }
+  }
+
+  switch (bestCount > 0) {
+    case true:
+      return best
+    case false:
+      break
+  }
+
+  switch (entry.locative > 0) {
     case true:
       return "place"
     case false:
@@ -295,8 +565,24 @@ function entityKind(entry: EntityEvidence): EntityKind {
   }
 }
 
-// The name says something (subject of a verb of saying) or is addressed.
-function personEvidence(sentence: Sentence, chunk: { head: number }, syntax: Lexicon["syntax"]): boolean {
+// The name says something (subject of a verb of saying), is addressed, or
+// wears an honorific title.
+function personEvidence(sentence: Sentence, chunk: { from: number; head: number }, syntax: Lexicon["syntax"]): boolean {
+  // The title may sit one token back across its abbreviation period
+  // (`Sr . Tanabe` after tokenization).
+  const title = (at: number): boolean => {
+    const word = wordOf(sentence, at)
+
+    return word !== null && syntax.personTitles.some((t) => t.toLowerCase() === word)
+  }
+
+  switch (title(chunk.from - 1) || title(chunk.from - 2)) {
+    case true:
+      return true
+    case false:
+      break
+  }
+
   for (const r of sentence.relations) {
     switch (r.kind === "vocative-of" && r.dependent === chunk.head) {
       case true:
@@ -321,31 +607,85 @@ function personEvidence(sentence: Sentence, chunk: { head: number }, syntax: Lex
   return false
 }
 
-// A typed head noun claims the name: genitive (`a CIDADE de S` — head noun,
-// then genitive marker, then the name) or appositive (`S, uma CIDADE fria`).
-function typedPlaceEvidence(sentence: Sentence, chunk: { from: number; head: number }, syntax: Lexicon["syntax"]): boolean {
+// A typed head noun claims the name with its KIND: genitive (`a CIDADE de S`
+// — head noun, then genitive marker, then the name), appositive (`S, uma
+// CIDADE fria`) or title compound (`o GATO Hellmanns`).
+function typedKindEvidence(
+  sentence: Sentence,
+  chunk: { from: number; head: number },
+  syntax: Lexicon["syntax"],
+): Optional<EntityKind> {
   const marker = chunk.from - 1
   const head = chunk.from - 2
 
   const genitive =
-    head >= 0 &&
-    wordOf(sentence, marker) !== null &&
-    syntax.genitiveMarkers.includes(wordOf(sentence, marker)!) &&
-    syntax.placeHeadNouns.includes(lemmaOf(sentence, head))
+    head >= 0 && wordOf(sentence, marker) !== null && syntax.genitiveMarkers.includes(wordOf(sentence, marker)!)
 
   switch (genitive) {
-    case true:
-      return true
+    case true: {
+      const kind = headNounKind(lemmaOf(sentence, head), syntax)
+
+      switch (kind.kind) {
+        case "some":
+          return kind
+        case "none":
+          break
+      }
+      break
+    }
     case false:
       break
   }
 
-  return sentence.relations.some(
-    (r) =>
-      r.kind === "appositive-of" &&
-      r.head === chunk.head &&
-      syntax.placeHeadNouns.includes(lemmaOf(sentence, r.dependent)),
-  )
+  for (const r of sentence.relations) {
+    switch (r.kind === "appositive-of" && r.head === chunk.head) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const kind = headNounKind(lemmaOf(sentence, r.dependent), syntax)
+
+    switch (kind.kind) {
+      case "some":
+        return kind
+      case "none":
+        continue
+    }
+  }
+
+  return { kind: "none" }
+}
+
+function headNounKind(lemma: string, syntax: Lexicon["syntax"]): Optional<EntityKind> {
+  switch (syntax.personHeadNouns.includes(lemma)) {
+    case true:
+      return { kind: "some", value: "person" }
+    case false:
+      break
+  }
+
+  switch (syntax.animalHeadNouns.includes(lemma)) {
+    case true:
+      return { kind: "some", value: "animal" }
+    case false:
+      break
+  }
+
+  switch (syntax.organizationHeadNouns.includes(lemma)) {
+    case true:
+      return { kind: "some", value: "organization" }
+    case false:
+      break
+  }
+
+  switch (syntax.placeHeadNouns.includes(lemma)) {
+    case true:
+      return { kind: "some", value: "place" }
+    case false:
+      return { kind: "none" }
+  }
 }
 
 // An odd number of quote marks before the chunk means it sits inside a
@@ -512,6 +852,14 @@ function crossParagraphLinks(paragraphs: readonly ParagraphSlot[], lexicon: Lexi
   for (let i = 1; i < paragraphs.length; i++) {
     const prev = paragraphs[i - 1]!
     const curr = paragraphs[i]!
+
+    // Continuity is chapter-local: a chapter break resets the discourse.
+    switch (sameChapter(prev, curr)) {
+      case false:
+        continue
+      case true:
+        break
+    }
 
     const links = linkAcrossParagraphs(
       { sentences: prev.analysis.sentences, spans: prev.analysis.spans, syntax: lexicon.syntax },

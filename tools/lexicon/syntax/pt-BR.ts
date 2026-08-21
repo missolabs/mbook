@@ -51,10 +51,14 @@ export const PT_BR_SYNTAX: SyntaxData = {
     // in DELAF that produced garbage relations ("onde" as a VERB subjecting
     // its clause), and `onde` is also the place-relative the located-in rule
     // reads.
+    // `muito/muita/pouco/pouca/mais/menos` are ALSO determiners/nouns — the
+    // dual membership makes the closed pass abstain so context decides:
+    // `bebeu muito vinho` quantifies, `era muito fraca` grades.
     adverbs: [
       "aqui", "aí", "ali", "cá", "lá", "acolá", "assim", "já", "ainda",
       "agora", "sempre", "nunca", "também", "não", "só", "apenas", "quase",
       "talvez", "hoje", "ontem", "amanhã", "onde", "antes", "depois",
+      "muito", "muita", "pouco", "pouca", "mais", "menos",
     ],
     abbreviations: [
       "Sr", "Sra", "Srta", "Dr", "Dra", "Prof", "Profa", "Exmo", "Exma", "etc",
@@ -298,8 +302,9 @@ export const PT_BR_SYNTAX: SyntaxData = {
   // Portuguese has no verb-particle construction.
   particles: [],
   degreeAdverbs: ["mais", "menos", "tão"],
-  // `do que` reaches the standard through the `que` after the contraction.
-  thanMarkers: ["que"],
+  // `do que` reaches the standard through the `que` after the contraction;
+  // `quanto` closes the equative (`tão alto quanto Rei`).
+  thanMarkers: ["que", "quanto"],
   perfectAuxiliaries: ["ter", "haver"],
   // Verb+noun pairs meaning one event; curated to the pairs literary prose
   // actually leans on.
@@ -317,6 +322,10 @@ export const PT_BR_SYNTAX: SyntaxData = {
     { verb: "tomar", noun: "decisão", lemma: "decidir" },
     { verb: "ter", noun: "medo", lemma: "temer" },
     { verb: "ter", noun: "esperança", lemma: "esperar" },
+    // Idioms ride the same pair shape — the lemma is the idiomatic event.
+    { verb: "bater", noun: "bota", lemma: "morrer" },
+    { verb: "abrir", noun: "jogo", lemma: "confessar" },
+    { verb: "perder", noun: "cabeça", lemma: "enlouquecer" },
   ],
   // Adpositions that govern places — the em-family and directionals; the
   // de-family stays out (a genitive `de Rei` types no one as geography).
@@ -345,6 +354,49 @@ export const PT_BR_SYNTAX: SyntaxData = {
     { form: "caso", edge: "none" },
     { form: "se", edge: "none" },
   ],
+  subordinatorSenses: [
+    { form: "quando", sense: "temporal" },
+    { form: "mal", sense: "temporal" },
+    { form: "enquanto", sense: "temporal" },
+    { form: "conforme", sense: "temporal" },
+    { form: "porque", sense: "causal" },
+    { form: "pois", sense: "causal" },
+    { form: "se", sense: "conditional" },
+    { form: "caso", sense: "conditional" },
+    { form: "embora", sense: "concessive" },
+  ],
+  discourseMarkers: [
+    { form: "mas", sense: "contrast" },
+    { form: "porém", sense: "contrast" },
+    { form: "contudo", sense: "contrast" },
+    { form: "todavia", sense: "contrast" },
+    { form: "entretanto", sense: "contrast" },
+    { form: "portanto", sense: "consequence" },
+    { form: "logo", sense: "consequence" },
+  ],
+  weatherVerbs: [
+    "chover", "nevar", "garoar", "ventar", "trovejar", "relampejar",
+    "amanhecer", "anoitecer", "entardecer", "escurecer", "clarear",
+  ],
+  negativeIndefinites: ["ninguém", "nada", "nenhum", "nenhuma", "nenhuns", "nenhumas"],
+  modalVerbs: ["poder", "dever", "querer", "costumar", "conseguir", "precisar", "tentar"],
+  reportingVerbs: ["achar", "pensar", "acreditar", "imaginar", "supor", "duvidar", "parecer"],
+  factiveVerbs: ["saber", "lembrar", "perceber", "notar", "descobrir", "admitir"],
+  intensifiers: ["muito", "tão", "bem", "quase", "meio", "bastante", "demais", "tanto"],
+  roleMarkers: ["como"],
+  purposeMarkers: ["para"],
+  durationMarkers: ["por", "durante"],
+  interrogativeAdverbs: ["onde", "aonde", "quando", "como", "porque", "porquê"],
+  personTitles: ["Sr", "Sra", "Srta", "Dr", "Dra", "Prof", "Profa", "Dona", "Dom", "Seu"],
+  personHeadNouns: [
+    "homem", "mulher", "menino", "menina", "moço", "moça", "senhor", "senhora",
+    "detetive", "médico", "médica", "professor", "professora", "escritor",
+    "escritora", "poeta", "amigo", "amiga", "vizinho", "vizinha", "rapaz",
+    "garoto", "garota", "velho", "velha", "jovem",
+  ],
+  animalHeadNouns: ["gato", "gata", "cão", "cadela", "cachorro", "cachorra", "pássaro", "cavalo", "peixe"],
+  organizationHeadNouns: ["empresa", "companhia", "banda", "jornal", "editora", "banco", "loja"],
+  objectPredicativeVerbs: ["achar", "deixar", "tornar", "considerar", "manter", "julgar"],
   // DELAF tense letters: P/I/J/F/Q presente..mais-que-perfeito, C condicional,
   // S/T/U subjuntivos, Y imperativo; W infinitivo (W1s.. pessoal); K particípio;
   // G gerúndio (the progressive/manner chains: `estava correndo`, `saiu correndo`).

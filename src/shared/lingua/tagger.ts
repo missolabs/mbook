@@ -431,6 +431,52 @@ function disambiguate(candidates: readonly Entry[], prev: PrevPos, syntax: Synta
       break
   }
 
+  // A degree word grades what follows: after `muito`/`mais`/`tão`/`very` a
+  // MARKED adjective outranks both the verb homograph (fraca -> fracar) and
+  // the junk adverb reading (alto -> loudly).
+  const degreeBefore =
+    prev.pos === "ADV" &&
+    (syntax.intensifiers.includes(prev.lemma) || syntax.degreeAdverbs.includes(prev.lemma))
+
+  switch (degreeBefore) {
+    case true: {
+      const adjectives = candidates.filter((e) => e.pos === "ADJ" && e.feat.length > 0)
+
+      switch (adjectives.length > 0) {
+        case true:
+          return lemmaPick(adjectives, syntax)
+        case false:
+          break
+      }
+      break
+    }
+    case false:
+      break
+  }
+
+  // After a modal (`could LEAVE`) or an infinitive marker (`to LEAVE`) the
+  // BARE verb reading beats the noun priority. Only English has featless
+  // bare verbs, so these gates are inert in Portuguese by construction.
+  const bareVerbBefore =
+    (prev.pos === "VERB" && syntax.modalVerbs.includes(prev.lemma)) ||
+    (prev.pos === "ADP" && syntax.purposeMarkers.includes(prev.lemma))
+
+  switch (bareVerbBefore) {
+    case true: {
+      const bare = candidates.filter((e) => e.pos === "VERB" && e.feat === "")
+
+      switch (bare.length > 0) {
+        case true:
+          return lemmaPick(bare, syntax)
+        case false:
+          break
+      }
+      break
+    }
+    case false:
+      break
+  }
+
   for (const rule of CONTEXT_RULES) {
     switch (rule.prev === prev.pos) {
       case false:

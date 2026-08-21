@@ -988,3 +988,186 @@ describe("the timeline: deterministic event ordering", () => {
     expect(analysis.timeline.edges).toEqual([])
   })
 })
+
+describe("assertion scope: what the book actually claims", () => {
+  function laneOf(text: string, word: string): string {
+    const analysis = analyze(text)
+
+    for (const event of analysis.timeline.events) {
+      const t = analysis.sentences[event.sentence]!.tokens[event.token]!
+
+      switch (t.role === "content" && t.tagged.token.text === word) {
+        case true:
+          return event.lane
+        case false:
+          continue
+      }
+    }
+
+    throw new Error(`no event for ${word}`)
+  }
+
+  it("a dicendi/attitude complement is REPORTED, a factive's is asserted", () => {
+    expect(laneOf("Rei disse que Kirie fugiu naquela noite.", "fugiu")).toBe("reported")
+    expect(laneOf("Acreditava que Kirie fugiu.", "fugiu")).toBe("reported")
+    expect(laneOf("Rei sabia que Kirie fugiu naquela noite.", "fugiu")).toBe("narrative")
+  })
+
+  it("a modal's complement folds — the unrealized event never reaches the timeline", () => {
+    const analysis = analyze("Queria escrever um livro.")
+
+    expect(relation(analysis.sentences[0]!, "complement-of", "escrever", "Queria")).toBeDefined()
+    expect(analysis.timeline.events.length).toBe(1)
+  })
+
+  it("weather is impersonal — Rei does not rain", () => {
+    const analysis = analyze("Rei chegou ao bar. Chovia.")
+
+    expect(analysis.discourse.filter((d) => d.kind === "elided-subject")).toEqual([])
+  })
+
+  it("a negative indefinite flips polarity from argument position", () => {
+    const sentence = only("Ninguém veio ao bar.")
+
+    expect(relation(sentence, "subject-of", "Ninguém", "veio").polarity).toBe("negative")
+  })
+
+  it("prospective narration: a conditional with advance evidence is a flash-forward", () => {
+    const analysis = analyze("Anos depois, eu entenderia.")
+    const event = analysis.timeline.events[0]!
+
+    expect(event.lane).toBe("narrative")
+    expect(event.effect).toBe("posterior")
+  })
+
+  it("two background states in one sentence overlap", () => {
+    const analysis = analyze("Chovia e ventava.")
+
+    expect(analysis.timeline.edges.length).toBe(1)
+    expect(analysis.timeline.edges[0]!.kind).toBe("overlaps")
+  })
+})
+
+describe("adjuncts, degrees, roles and purposes", () => {
+  it("an adverb finally binds to its verb", () => {
+    const sentence = only("Correu desesperadamente pela rua.")
+
+    expect(relation(sentence, "advmod-of", "desesperadamente", "Correu")).toBeDefined()
+  })
+
+  it("an intensifier grades its adjective — and the adjective survives the homographs", () => {
+    const sentence = only("A luz era muito fraca.")
+
+    expect(tagged(sentence, "fraca").pos).toBe("ADJ")
+    expect(relation(sentence, "degree-of", "muito", "fraca")).toBeDefined()
+    expect(relation(sentence, "predicate-of", "fraca", "era")).toBeDefined()
+  })
+
+  it("the object predicative: found the house EMPTY", () => {
+    const sentence = only("Achou a casa vazia.")
+
+    expect(relation(sentence, "predicative-of", "vazia", "casa")).toBeDefined()
+  })
+
+  it("como hands the subject a role, and displaces the false object", () => {
+    const sentence = only("Trabalhava como detetive.")
+
+    expect(relation(sentence, "role-of", "detetive", "Trabalhava")).toBeDefined()
+    expect(sentence.relations.filter((r) => r.kind === "object-of")).toEqual([])
+  })
+
+  it("para + infinitive is a purpose", () => {
+    const sentence = only("Saiu para comprar pão.")
+
+    expect(relation(sentence, "purpose-of", "comprar", "Saiu")).toBeDefined()
+  })
+
+  it("por dois anos is an interval, not a point in time", () => {
+    const sentence = only("Esperou por dois anos.")
+
+    expect(relation(sentence, "duration-of", "anos", "Esperou")).toBeDefined()
+    expect(sentence.relations.filter((r) => r.kind === "temporal-of")).toEqual([])
+  })
+
+  it("the superlative names its domain", () => {
+    const sentence = only("Rei era o mais alto da cidade.")
+
+    expect(relation(sentence, "degree-of", "mais", "alto")).toBeDefined()
+    expect(relation(sentence, "compared-to", "cidade", "alto")).toBeDefined()
+  })
+
+  it("the equative closes on quanto", () => {
+    const sentence = only("Kumiko era tão alta quanto Kirie.")
+
+    expect(relation(sentence, "compared-to", "Kirie", "alta")).toBeDefined()
+  })
+})
+
+describe("sentence types, addressees and titles", () => {
+  it("classifies the four types", () => {
+    expect(only("Onde ele mora?").sentenceType).toBe("interrogative")
+    expect(only("Corra!").sentenceType).toBe("imperative")
+    expect(only("Rei chegou.").sentenceType).toBe("declarative")
+  })
+
+  it("a fronted adjunct interrogative binds to the verb", () => {
+    const sentence = only("Onde ele mora?")
+
+    expect(relation(sentence, "advmod-of", "Onde", "mora")).toBeDefined()
+  })
+
+  it("the imperative's subject is its addressee", () => {
+    const sentence = only("Não chore, Daniela.")
+
+    expect(sentence.sentenceType).toBe("imperative")
+    expect(relation(sentence, "subject-of", "Daniela", "chore")).toBeDefined()
+    expect(relation(sentence, "vocative-of", "Daniela", "chore")).toBeDefined()
+  })
+
+  it("a mid-sentence comma-bound name is a vocative too", () => {
+    const sentence = only("Sabe, Daniela, que a noite é longa.")
+
+    expect(relation(sentence, "vocative-of", "Daniela", "Sabe")).toBeDefined()
+  })
+
+  it("the title compound describes its name — both orders", () => {
+    const title = only("O detetive Rei chegou cedo.")
+
+    expect(relation(title, "appositive-of", "detetive", "Rei")).toBeDefined()
+
+    const comma = only("Rei, o detetive, chegou cedo.")
+
+    expect(relation(comma, "appositive-of", "detetive", "Rei")).toBeDefined()
+  })
+})
+
+describe("discourse: forward, plural and rhetorical reference", () => {
+  it("cataphora: a fronted pronoun finds the matrix subject ahead", () => {
+    const analysis = analyze("Quando ela chegou, Kirie sorriu.")
+    const links = analysis.discourse.filter((d) => d.kind === "anaphora")
+
+    expect(links.length).toBe(1)
+
+    const to = analysis.sentences[0]!.tokens[links[0]!.toToken]!
+    expect(to.role === "content" && to.tagged.token.text).toBe("Kirie")
+  })
+
+  it("a plural pronoun takes a coordinated pair", () => {
+    const analysis = analyze("Mizoguchi e Kirie chegaram cedo. Eles riam.")
+    const links = analysis.discourse.filter((d) => d.kind === "anaphora")
+
+    expect(links.length).toBe(1)
+    expect(links[0]!.toSentence).toBe(0)
+
+    const to = analysis.sentences[0]!.tokens[links[0]!.toToken]!
+    expect(to.role === "content" && to.tagged.token.text).toBe("Mizoguchi")
+  })
+
+  it("a sentence-initial mas asserts contrast with its predecessor", () => {
+    const analysis = analyze("Kirie chegou ao bar. Mas Kumiko partiu.")
+    const links = analysis.discourse.filter((d) => d.kind === "contrast")
+
+    expect(links.length).toBe(1)
+    expect(links[0]!.toSentence).toBe(0)
+  })
+})

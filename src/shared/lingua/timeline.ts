@@ -31,7 +31,7 @@ import type { Sentence } from "./pipeline"
 import type { SyntaxData } from "./model"
 import { verbTense } from "./model"
 
-export type TimelineLane = "narrative" | "speech" | "offline" | "irrealis" | "negated"
+export type TimelineLane = "narrative" | "speech" | "offline" | "irrealis" | "negated" | "reported"
 
 export type TimelineEffect = "perfective" | "stative" | "anterior" | "posterior" | "none"
 
@@ -43,7 +43,7 @@ export type TimelineEvent = {
   effect: TimelineEffect
 }
 
-export type TimelineEdgeKind = "before" | "meets" | "during"
+export type TimelineEdgeKind = "before" | "meets" | "during" | "overlaps"
 
 export type TimelineProvenance = "narrative-advance" | "tense-anaphora" | "connective" | "prospection"
 
@@ -80,7 +80,10 @@ export function buildTimeline(input: TimelineInput): Timeline {
 
   input.sentences.forEach((sentence, si) => {
     const embedded = embeddedClauseHeads(sentence)
+    const reported = reportedRegions(sentence, input.syntax)
+    const prospective = prospectiveEvidence(sentence, input.syntax)
     let retreatArmed = sentenceRetreats(sentence, input.syntax)
+    let lastStative: Optional<Anchor> = { kind: "none" }
 
     for (const chunk of sentence.chunks) {
       switch (chunk.kind) {
@@ -101,7 +104,30 @@ export function buildTimeline(input: TimelineInput): Timeline {
           break
       }
 
-      const { lane, sense, effect } = admitted.value
+      let { lane, sense, effect } = admitted.value
+
+      // A verb inside a non-factive attitude's complement is REPORTED, not
+      // asserted: `disse que Daniela fugiu` is Rei's claim.
+      switch (lane === "narrative" && reported.some((r) => chunk.head >= r.from && chunk.head < r.to)) {
+        case true:
+          lane = "reported"
+          break
+        case false:
+          break
+      }
+
+      // Prospective narration: a conditional with advance evidence in its
+      // sentence is a flash-forward, not irrealis — `anos depois eu
+      // entenderia`.
+      switch (lane === "irrealis" && sense === "conditional" && prospective) {
+        case true:
+          lane = "narrative"
+          effect = "posterior"
+          break
+        case false:
+          break
+      }
+
       const at: Anchor = { sentence: si, token: chunk.head }
 
       events.push({ sentence: si, token: chunk.head, lane, sense, effect })
@@ -116,6 +142,8 @@ export function buildTimeline(input: TimelineInput): Timeline {
         case "irrealis":
           continue
         case "negated":
+          continue
+        case "reported":
           continue
       }
 
@@ -158,6 +186,18 @@ export function buildTimeline(input: TimelineInput): Timeline {
           continue
         }
         case "stative": {
+          // Two background states in one sentence overlap each other:
+          // `Chovia e ventava.`
+          switch (lastStative.kind) {
+            case "some":
+              edges.push(edge("overlaps", lastStative.value, at, "tense-anaphora"))
+              break
+            case "none":
+              break
+          }
+
+          lastStative = { kind: "some", value: at }
+
           switch (reference.kind) {
             case "some":
               edges.push(edge("during", reference.value, at, "tense-anaphora"))
@@ -471,6 +511,92 @@ function addConnectiveEdge(
     case "none":
       return
   }
+}
+
+type Region = { from: number; to: number }
+
+// The reported spans of a sentence: each complement-of whose matrix is a
+// verb of saying or a NON-factive attitude verb scopes its clause — forward
+// to the sentence end for `disse QUE...`, backward to the attribution
+// boundary for the inverted quote (`"...," disse Rei`). Factives assert
+// their complements and mint no region.
+function reportedRegions(sentence: Sentence, syntax: SyntaxData): readonly Region[] {
+  const out: Region[] = []
+
+  for (const r of sentence.relations) {
+    switch (r.kind === "complement-of") {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const matrix = lemmaOf(sentence, r.head)
+
+    const reporting =
+      (syntax.dicendi.includes(matrix) || syntax.reportingVerbs.includes(matrix)) &&
+      syntax.factiveVerbs.includes(matrix) === false
+
+    switch (reporting) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    switch (r.dependent < r.head) {
+      case true:
+        out.push({ from: r.dependent, to: r.head })
+        continue
+      case false:
+        out.push({ from: r.dependent, to: sentence.tokens.length })
+        continue
+    }
+  }
+
+  return out
+}
+
+function lemmaOf(sentence: Sentence, index: number): string {
+  const token = sentence.tokens[index]!
+
+  switch (token.role) {
+    case "content":
+      return token.tagged.lemma
+    case "punctuation":
+      return ""
+  }
+}
+
+// Advance evidence licensing prospective narration: a declared advance
+// connective anywhere in the sentence, or a temporal adjunct relation.
+function prospectiveEvidence(sentence: Sentence, syntax: SyntaxData): boolean {
+  switch (sentence.relations.some((r) => r.kind === "temporal-of")) {
+    case true:
+      return true
+    case false:
+      break
+  }
+
+  for (const token of sentence.tokens) {
+    switch (token.role) {
+      case "punctuation":
+        continue
+      case "content":
+        break
+    }
+
+    const spec = syntax.timeConnectives.find((c) => c.form === token.tagged.token.text.toLowerCase())
+
+    switch (spec !== undefined && spec!.role === "advance") {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  return false
 }
 
 function sentenceRetreats(sentence: Sentence, syntax: SyntaxData): boolean {

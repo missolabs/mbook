@@ -32,6 +32,8 @@ import type { Lexicon } from "./lexicon"
 import { bind } from "./binder"
 import type { Relation, SubjectPin } from "./binder"
 import { preprocess, reanchor } from "./preprocessor"
+import type { SyntaxData } from "./model"
+import { verbTense } from "./model"
 import { segment } from "./segmenter"
 import { tagSentence } from "./tagger"
 import type { AnalyzedToken } from "./tagger"
@@ -58,12 +60,18 @@ export type Attribution =
   | { kind: "speech"; speaker: Speaker }
   | { kind: "written"; writer: Speaker }
 
+// What kind of speech act the sentence's form encodes: `?` interrogates, a
+// directive-mooded verb-initial clause commands, `!` otherwise exclaims,
+// and everything else declares.
+export type SentenceType = "declarative" | "interrogative" | "imperative" | "exclamative"
+
 export type Sentence = {
   source: Span
   tokens: readonly AnalyzedToken[]
   chunks: readonly Chunk[]
   relations: readonly Relation[]
   attribution: Attribution
+  sentenceType: SentenceType
 }
 
 export type SpanAnchor =
@@ -148,7 +156,14 @@ function analyzeSentence(tokens: readonly SourceToken[], input: ParagraphInput):
 
   const phrases = parsePhrases(classified, input.lexicon.syntax.chunkRules)
 
-  const base: Sentence = { source, tokens: classified, chunks: phrases, relations: [], attribution: { kind: "narration" } }
+  const base: Sentence = {
+    source,
+    tokens: classified,
+    chunks: phrases,
+    relations: [],
+    attribution: { kind: "narration" },
+    sentenceType: "declarative",
+  }
 
   // Authored bindings first (the `@[Name]` pins are declarations), then the
   // binder resolves every remaining role heuristically.
@@ -156,8 +171,116 @@ function analyzeSentence(tokens: readonly SourceToken[], input: ParagraphInput):
   const relations = bind({ tokens: classified, chunks: phrases, pins, syntax: input.lexicon.syntax })
 
   const attribution = deriveAttribution(base, input.spans)
+  const sentenceType = classifySentence(classified, phrases, input.lexicon.syntax)
 
-  return { source, tokens: classified, chunks: phrases, relations, attribution }
+  return { source, tokens: classified, chunks: phrases, relations, attribution, sentenceType }
+}
+
+function classifySentence(
+  tokens: readonly AnalyzedToken[],
+  chunks: readonly Chunk[],
+  syntax: SyntaxData,
+): SentenceType {
+  switch (hasMark(tokens, "?")) {
+    case true:
+      return "interrogative"
+    case false:
+      break
+  }
+
+  const directive = verbInitialDirective(tokens, chunks, syntax)
+
+  switch (hasMark(tokens, "!")) {
+    case true:
+      switch (directive) {
+        case true:
+          return "imperative"
+        case false:
+          return "exclamative"
+      }
+    case false:
+      break
+  }
+
+  switch (directive) {
+    case true:
+      return "imperative"
+    case false:
+      return "declarative"
+  }
+}
+
+function hasMark(tokens: readonly AnalyzedToken[], mark: string): boolean {
+  for (const token of tokens) {
+    switch (token.role) {
+      case "content":
+        continue
+      case "punctuation":
+        break
+    }
+
+    switch (token.token.text === mark) {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  return false
+}
+
+// The clause opens on its verb (only negators may precede) and that verb
+// wears imperative morphology: `Corra!`, `Não chore, Daniela.`
+function verbInitialDirective(
+  tokens: readonly AnalyzedToken[],
+  chunks: readonly Chunk[],
+  syntax: SyntaxData,
+): boolean {
+  const vp = chunks.find((c) => c.kind === "VP")
+
+  switch (vp === undefined) {
+    case true:
+      return false
+    case false:
+      break
+  }
+
+  for (let at = 0; at < vp!.from; at++) {
+    const token = tokens[at]!
+
+    switch (token.role) {
+      case "punctuation":
+        continue
+      case "content":
+        break
+    }
+
+    switch (syntax.negators.includes(token.tagged.token.text.toLowerCase())) {
+      case true:
+        continue
+      case false:
+        return false
+    }
+  }
+
+  const head = tokens[vp!.head]!
+
+  switch (head.role) {
+    case "punctuation":
+      return false
+    case "content":
+      break
+  }
+
+  const sense = verbTense(head.tagged.feat, syntax.verbFeats)
+
+  switch (sense.kind) {
+    case "none":
+      return false
+    case "some":
+      return sense.value === "imperative" || sense.value === "subjunctive"
+  }
 }
 
 function sentenceSpan(tokens: readonly SourceToken[]): Span {

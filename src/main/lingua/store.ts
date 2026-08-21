@@ -69,7 +69,8 @@ CREATE TABLE sentences (
   line INTEGER NOT NULL,
   col INTEGER NOT NULL,
   attribution_kind TEXT NOT NULL,
-  attribution_slug TEXT
+  attribution_slug TEXT,
+  sentence_type TEXT NOT NULL DEFAULT 'declarative'
 );
 CREATE TABLE tokens (
   sentence_id INTEGER NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
@@ -137,6 +138,16 @@ CREATE TABLE entities (
   kind TEXT NOT NULL,
   mentions INTEGER NOT NULL
 );
+CREATE TABLE aliases (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL,
+  description TEXT NOT NULL
+);
+CREATE TABLE turn_guesses (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  paragraph_idx INTEGER NOT NULL,
+  slug TEXT NOT NULL
+);
 `
 
 type Db = InstanceType<typeof Database>
@@ -156,7 +167,7 @@ export function openLinguaStore(path: string): Result<LinguaStore, StoreError> {
   }
 }
 
-const VERSION = 5
+const VERSION = 6
 
 function migrate(db: Db): void {
   const version = currentVersion(db)
@@ -169,6 +180,8 @@ function migrate(db: Db): void {
   }
 
   db.exec(`
+DROP TABLE IF EXISTS turn_guesses;
+DROP TABLE IF EXISTS aliases;
 DROP TABLE IF EXISTS entities;
 DROP TABLE IF EXISTS timeline_edges;
 DROP TABLE IF EXISTS timeline_events;
@@ -202,7 +215,7 @@ function store(db: Db): LinguaStore {
     "INSERT INTO characters (book_id, slug, canonical) VALUES (?, ?, ?)",
   )
   const insertSentence = db.prepare(
-    "INSERT INTO sentences (book_id, paragraph_idx, idx, char_start, char_end, chapter_idx, chapter_title, line, col, attribution_kind, attribution_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO sentences (book_id, paragraph_idx, idx, char_start, char_end, chapter_idx, chapter_title, line, col, attribution_kind, attribution_slug, sentence_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
   const insertToken = db.prepare(
     "INSERT INTO tokens (sentence_id, idx, form, lemma, pos, features, provenance, char_start, char_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -227,6 +240,12 @@ function store(db: Db): LinguaStore {
   )
   const insertEntity = db.prepare(
     "INSERT INTO entities (book_id, name, kind, mentions) VALUES (?, ?, ?, ?)",
+  )
+  const insertAlias = db.prepare(
+    "INSERT INTO aliases (book_id, slug, description) VALUES (?, ?, ?)",
+  )
+  const insertTurnGuess = db.prepare(
+    "INSERT INTO turn_guesses (book_id, paragraph_idx, slug) VALUES (?, ?, ?)",
   )
 
   const writeAll = db.transaction((record: BookRecord, rows: AnalysisRows) => {
@@ -279,6 +298,14 @@ function store(db: Db): LinguaStore {
     for (const entity of rows.entities) {
       insertEntity.run(bookId, entity.name, entity.kind, entity.mentions)
     }
+
+    for (const alias of rows.aliases) {
+      insertAlias.run(bookId, alias.slug, alias.description)
+    }
+
+    for (const guess of rows.turnGuesses) {
+      insertTurnGuess.run(bookId, guess.paragraphIdx, guess.slug)
+    }
   })
 
   function writeDiscourseLink(link: DiscourseLinkRow, bookId: number, ids: ReadonlyMap<string, number>): void {
@@ -307,6 +334,7 @@ function store(db: Db): LinguaStore {
         sentence.col,
         sentence.attributionKind,
         orNull(sentence.attributionSlug),
+        sentence.sentenceType,
       ).lastInsertRowid,
     )
 

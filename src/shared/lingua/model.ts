@@ -128,6 +128,21 @@ export type SubordinatorTime = {
   edge: "sub-before-matrix" | "sub-meets-matrix" | "matrix-during-sub" | "matrix-meets-sub" | "none"
 }
 
+// The MEANING of a subordinate clause — temporal, causal, conditional,
+// concessive — read off its subordinator; consumers of adverbial-of look the
+// sense up here.
+export type SubordinatorSense = {
+  form: string
+  sense: string
+}
+
+// A sentence-initial rhetorical connective: `mas`/`but` asserts CONTRAST with
+// the previous sentence, `portanto`/`so` asserts CONSEQUENCE.
+export type DiscourseMarker = {
+  form: string
+  sense: "contrast" | "consequence"
+}
+
 // A third-person pronoun that refers back: its surface form and the agreement
 // feat ([mf][sp]) an antecedent must carry. An empty feat matches anything —
 // the honest declaration for a language whose nouns carry no gender.
@@ -205,6 +220,47 @@ export type SyntaxData = {
   // subordinator asserts about clause order.
   timeConnectives: TimeConnective[]
   subordinatorTime: SubordinatorTime[]
+  // The semantic label of each subordinate clause (temporal/causal/
+  // conditional/concessive), and the sentence-initial rhetorical connectives.
+  subordinatorSenses: SubordinatorSense[]
+  discourseMarkers: DiscourseMarker[]
+  // Meteorological verbs are impersonal: `Chovia.` continues no one's
+  // subject and rains on no antecedent.
+  weatherVerbs: string[]
+  // Words that negate a clause from ARGUMENT position: `Ninguém veio`,
+  // `nothing remained`, `no cat came`.
+  negativeIndefinites: string[]
+  // Modal lemmas: their chained complement is possibility/volition, not an
+  // asserted event (`podia ter fugido`, `queria escrever`).
+  modalVerbs: string[]
+  // Non-factive attitude verbs: their complement clause is REPORTED, not
+  // asserted (`achava que fugiu`). Factives assert theirs (`sabia que
+  // fugiu`) and override membership in the reported class.
+  reportingVerbs: string[]
+  factiveVerbs: string[]
+  // Degree words grading an adjective without comparing (`muito alto`,
+  // `very tall`).
+  intensifiers: string[]
+  // The role predicate marker (`trabalhava COMO detetive`, `worked AS a
+  // detective`).
+  roleMarkers: string[]
+  // The purpose-infinitive opener (`saiu PARA comprar pão`).
+  purposeMarkers: string[]
+  // Duration adjunct openers, gated on a temporal head (`POR dois anos`,
+  // `FOR two years` — `for Mary` never fires).
+  durationMarkers: string[]
+  // Fronted adjunct interrogatives (`Onde ele mora?`, `Why did she leave?`).
+  interrogativeAdverbs: string[]
+  // Honorific titles: person evidence for the name they precede.
+  personTitles: string[]
+  // Typed head nouns for the entity pass, by kind (the place list already
+  // exists as placeHeadNouns).
+  personHeadNouns: string[]
+  animalHeadNouns: string[]
+  organizationHeadNouns: string[]
+  // Verbs whose postnominal adjective predicates the OBJECT (`achou a casa
+  // VAZIA`, `left the door OPEN`).
+  objectPredicativeVerbs: string[]
   verbFeats: VerbFeatMarks
 }
 

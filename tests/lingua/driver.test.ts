@@ -301,6 +301,79 @@ describe("entity typing: ordered evidence, strongest rule wins", () => {
   })
 })
 
+describe("aliases, turns and chapter boundaries", () => {
+  it("an appositive onto a cast member registers the description as an alias", () => {
+    const book = ["---", "language: pt-BR", "character: Rei", "---", "", "Rei, o detetive, chegou cedo."].join("\n")
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.aliases).toEqual([{ slug: "rei", description: "detetive" }])
+  })
+
+  it("unattributed dialogue turns alternate between the two participants", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "character: Daniela",
+      "---",
+      "",
+      "—[Rei] — Você viu o gato?",
+      "",
+      "— Não vi nada.",
+      "",
+      "—[Rei] — Procure de novo.",
+      "",
+      "— Está bem.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.turnGuesses).toEqual([
+      { paragraph: 1, slug: "daniela" },
+      { paragraph: 3, slug: "daniela" },
+    ])
+  })
+
+  it("a chapter break is a time jump — no stitching across it", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "## ",
+      "",
+      "Rei chegou ao bar. Sentou na cadeira.",
+      "",
+      "## ",
+      "",
+      "Abriu o caderno. Escreveu a primeira linha.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+
+    expect(analysis.timelineEdges).toEqual([])
+  })
+
+  it("head nouns type entities by kind, titles make persons", () => {
+    const book = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "O gato Hellmanns dormia. Vi o Sr. Tanabe no mercado.",
+    ].join("\n")
+
+    const analysis = analyze(book, BOTH)
+    const byName = new Map(analysis.entities.map((e) => [e.name, e]))
+
+    expect(byName.get("Hellmanns")).toMatchObject({ kind: "animal" })
+    expect(byName.get("Tanabe")).toMatchObject({ kind: "person" })
+    expect(byName.has("Sr")).toBe(false)
+  })
+})
+
 describe("the timeline crosses paragraph breaks", () => {
   it("the last perfective of one paragraph precedes the first of the next", () => {
     const book = [

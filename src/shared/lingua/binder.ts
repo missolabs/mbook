@@ -35,6 +35,7 @@
 import type { Chunk } from "./parser"
 import type { AnalyzedToken } from "./tagger"
 import type { SyntaxData, ValencyFrame, ValencyHint, VerbFeatMarks } from "./model"
+import { verbTense } from "./model"
 import type { Optional } from "../optional"
 
 export type RelationKind =
@@ -55,6 +56,12 @@ export type RelationKind =
   | "reflexive-of" // the reflexive/reciprocal/impersonal clitic riding its verb (abraçaram-SE)
   | "adverbial-of" // an adverbial subordinate clause's subordinator, bound to the matrix verb
   | "light-verb-of" // verb+noun denoting ONE event (deu um PASSEIO = passear); pair resolved in syntax data
+  | "advmod-of" // an adverb bound to the verb it modifies (correu DESESPERADAMENTE; wh-adjuncts: ONDE mora?)
+  | "degree-of" // an intensifier/degree word grading its adjective (MUITO alto, MAIS alto)
+  | "predicative-of" // an object predicative (achou a casa VAZIA — vazia predicates casa)
+  | "role-of" // the como/as role predicate (trabalhava como DETETIVE)
+  | "purpose-of" // a purpose infinitive bound to its matrix (saiu para COMPRAR pão)
+  | "duration-of" // a duration adjunct (POR DOIS ANOS), distinct from point-in-time temporal-of
 
 export type RelationProvenance = "heuristic" | "pinned"
 
@@ -104,6 +111,7 @@ export function bind(input: RelationInput): readonly Relation[] {
         addInfinitiveChain(relations, input, ci)
         addParticipleChain(relations, input, ci)
         addGerundChain(relations, input, ci)
+        addModalChain(relations, input, ci)
         addParticle(relations, input, ci)
         addOblique(relations, input, ci)
         addDative(relations, input, ci)
@@ -112,6 +120,7 @@ export function bind(input: RelationInput): readonly Relation[] {
         addModifiers(relations, input.tokens, chunk)
         addPossessive(relations, input, ci)
         addAppositive(relations, input, ci)
+        addTitleAppositive(relations, input, ci)
         return
       case "PP":
         addAttachment(relations, input, ci)
@@ -123,10 +132,17 @@ export function bind(input: RelationInput): readonly Relation[] {
   addVocatives(relations, input)
   addPossessiveRelatives(relations, input)
   addComparatives(relations, input)
+  addSuperlativeDomains(relations, input)
   addSubordinateClauses(relations, input)
   addSharedObjects(relations, input)
   addQuoteContent(relations, input)
   addTemporalOpeners(relations, input)
+  addObjectPredicatives(relations, input)
+  addRolePredicates(relations, input)
+  addPurposeInfinitives(relations, input)
+  addDurationOpeners(relations, input)
+  addWhAdjuncts(relations, input)
+  addAdverbAttachment(relations, input)
   expandCoordination(relations, input)
 
   return applyPolarity(relations, input)
@@ -626,20 +642,23 @@ function clauseMateSubjectBefore(input: RelationInput, ci: number): boolean {
 // an NP read as the direct object — the two are exclusive, since material after
 // the complementizer belongs to the embedded clause.
 function addComplementOrObject(relations: Relation[], input: RelationInput, ci: number, pins: Pins): void {
-  switch (takesObject(verbLemma(input.tokens, input.chunks[ci]!), input.syntax.valency)) {
-    case false:
-      return
-    case true:
-      break
-  }
-
   const start = afterParentheticals(input.tokens, input.chunks[ci]!.to)
 
+  // The complementizer is NOT gated on object valency: prepositional and
+  // attitude verbs take que/that-clauses too (`acreditava que`, `thought
+  // that he left`) — and the reported-speech scope depends on the edge.
   switch (isComplementizer(input.tokens[start], input.syntax.complementizers)) {
     case true:
       relations.push(relation("complement-of", start, input.chunks[ci]!.head, "heuristic"))
       return
     case false:
+      break
+  }
+
+  switch (takesObject(verbLemma(input.tokens, input.chunks[ci]!), input.syntax.valency)) {
+    case false:
+      return
+    case true:
       break
   }
 
@@ -2167,6 +2186,66 @@ function isGerund(token: AnalyzedToken, marks: VerbFeatMarks): boolean {
   }
 }
 
+// The English modal chain: a bare (featless) verb directly after a declared
+// modal — across at most a single `to` — is its complement (`could leave`,
+// `wanted to leave`). Portuguese modals chain through the marked infinitive
+// already; this rule is what an infinitive-less morphology needs instead.
+function addModalChain(relations: Relation[], input: RelationInput, ci: number): void {
+  const chunk = input.chunks[ci]!
+  const head = input.tokens[chunk.head]!
+
+  const bare =
+    head.role === "content" && head.tagged.pos === "VERB" && head.tagged.feat === ""
+
+  switch (bare) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const previous = previousVp(input.chunks, ci)
+
+  switch (previous.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const matrix = input.chunks[previous.value]!
+
+  switch (input.syntax.modalVerbs.includes(verbLemma(input.tokens, matrix))) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const gap = chunk.from - matrix.to
+  const between = gap === 1 ? tokenLower(input.tokens[matrix.to]!) : null
+
+  const adjacent =
+    gap === 0 || (gap === 1 && between !== null && input.syntax.purposeMarkers.includes(between!))
+
+  switch (adjacent) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const claimed = relations.some((r) => r.kind === "complement-of" && r.dependent === chunk.head)
+
+  switch (claimed) {
+    case true:
+      return
+    case false:
+      relations.push(relation("complement-of", chunk.head, matrix.head, "heuristic"))
+      return
+  }
+}
+
 // A declared particle directly at the verb's right edge forms a unit with it
 // (`gave up`, `looked back`) — unless it opens a PP chunk there, in which
 // case it is a plain preposition (`went up the stairs`).
@@ -2497,19 +2576,35 @@ function spreadsAcrossCoordination(kind: RelationKind): boolean {
       return false
     case "light-verb-of":
       return false
+    case "advmod-of":
+      return false
+    case "degree-of":
+      return false
+    case "predicative-of":
+      return false
+    case "role-of":
+      return false
+    case "purpose-of":
+      return false
+    case "duration-of":
+      return false
   }
 }
 
 // ─── sentence post-passes ────────────────────────────────────────────────────
-// A comma-bound NP opening on an indefinite article renames the nominal
-// before it: `Daniela, UMA MULHER que conheci ao entrar` — the description IS
-// Daniela. The indefinite-article gate is what keeps list commas out
-// (`Rei, Daniela e Hellmanns` renames no one).
+// A comma-bound NP opening on an article renames the nominal before it:
+// `Daniela, UMA MULHER que conheci` and `Rei, O DETETIVE` both describe the
+// name. Indefinite openers rename any nominal; DEFINITE openers demand a
+// proper-noun anchor — that gate is what keeps `pão, o vinho e o queijo`
+// a list, not a renaming.
 function addAppositive(relations: Relation[], input: RelationInput, ci: number): void {
   const b = input.chunks[ci]!
   const opener = tokenLower(input.tokens[b.from]!)
 
-  switch (opener !== null && input.syntax.indefiniteArticles.includes(opener!)) {
+  const indefinite = opener !== null && input.syntax.indefiniteArticles.includes(opener!)
+  const definite = opener !== null && input.syntax.definiteArticles.includes(opener!)
+
+  switch (indefinite || definite) {
     case false:
       return
     case true:
@@ -2525,11 +2620,61 @@ function addAppositive(relations: Relation[], input: RelationInput, ci: number):
       break
   }
 
+  // Name-shaped: PROPN, or a capitalized noun — dictionary collisions (`Rei`
+  // the king) must not unname a character.
+  const anchor = input.tokens[a!.head]!
+  const nameShaped =
+    anchor.role === "content" &&
+    (anchor.tagged.pos === "PROPN" ||
+      (anchor.tagged.pos === "NOUN" && /^[A-ZÀ-Ý]/.test(anchor.tagged.token.text)))
+
+  switch (definite && nameShaped === false) {
+    case true:
+      return
+    case false:
+      break
+  }
+
   switch (isComma(input.tokens[b.from - 1])) {
     case false:
       return
     case true:
       relations.push(relation("appositive-of", b.head, a!.head, "heuristic"))
+      return
+  }
+}
+
+// The title compound, the appositive's other order: a common-noun NP
+// directly abutting a proper-noun NP is a description OF that name — `o
+// DETETIVE Rei`, `the DETECTIVE Rei` — the same description->name edge the
+// comma appositive builds.
+function addTitleAppositive(relations: Relation[], input: RelationInput, ci: number): void {
+  const names = input.chunks[ci]!
+  const head = input.tokens[names.head]!
+
+  switch (head.role === "content" && head.tagged.pos === "PROPN") {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const description = input.chunks.find((c) => c.kind === "NP" && c.to === names.from)
+
+  switch (description === undefined) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const noun = input.tokens[description!.head]!
+
+  switch (noun.role === "content" && noun.tagged.pos === "NOUN") {
+    case true:
+      relations.push(relation("appositive-of", description!.head, names.head, "heuristic"))
+      return
+    case false:
       return
   }
 }
@@ -2636,9 +2781,13 @@ function addTrailingVocative(relations: Relation[], input: RelationInput): void 
 
     const commaBefore = np.from > 0 && isComma(input.tokens[np.from - 1])
     const after = input.tokens[np.to]
-    const terminalAfter = after === undefined || (after.role === "punctuation" && isQuoteTransparentTerminal(after.token.text))
+    // Trailing (`Não chore, Daniela.`) or mid-sentence between commas
+    // (`Sabe, Daniela, que...`).
+    const closed =
+      after === undefined ||
+      (after.role === "punctuation" && (isQuoteTransparentTerminal(after.token.text) || after.token.text === ","))
 
-    switch (commaBefore && terminalAfter) {
+    switch (commaBefore && closed) {
       case false:
         continue
       case true:
@@ -2659,10 +2808,42 @@ function addTrailingVocative(relations: Relation[], input: RelationInput): void 
     switch (vp.kind) {
       case "none":
         continue
-      case "some":
-        relations.push(relation("vocative-of", np.head, input.chunks[vp.value]!.head, "heuristic"))
+      case "some": {
+        const head = input.chunks[vp.value]!.head
+
+        relations.push(relation("vocative-of", np.head, head, "heuristic"))
+        addAddresseeSubject(relations, input, np.head, head)
         continue
+      }
     }
+  }
+}
+
+// An imperative's subject IS its addressee: `Não chore, Daniela` — the one
+// who shouldn't cry is Daniela. Portuguese imperatives surface as
+// imperative- or subjunctive-marked forms; the rule stands down when the
+// clause already found a subject.
+function addAddresseeSubject(relations: Relation[], input: RelationInput, name: number, head: number): void {
+  const sense = verbTense(contentFeat(input.tokens[head]!), input.syntax.verbFeats)
+
+  const directive =
+    sense.kind === "some" && (sense.value === "imperative" || sense.value === "subjunctive")
+
+  switch (directive) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const subjected = relations.some((r) => r.kind === "subject-of" && r.head === head)
+
+  switch (subjected) {
+    case true:
+      return
+    case false:
+      relations.push(relation("subject-of", name, head, "heuristic"))
+      return
   }
 }
 
@@ -3072,6 +3253,499 @@ function addTemporalOpeners(relations: Relation[], input: RelationInput): void {
   }
 }
 
+// ─── adjuncts, degrees, roles, purposes ──────────────────────────────────────
+// Adverbs finally bind: a declared intensifier or degree word directly
+// before an adjective grades it (degree-of: `muito alto`, `mais alto`);
+// every other free adverb attaches to its verb (advmod-of) — the previous
+// verb when it trails one (`correu desesperadamente`), the next when it
+// leads (`sempre escrevia`). Function words that other passes own (negators,
+// relatives, subordinators, connectives, degree words themselves) stay out.
+function addAdverbAttachment(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    switch (token.role) {
+      case "punctuation":
+        return
+      case "content":
+        break
+    }
+
+    const lower = tokenLower(token)!
+
+    // Degree words match by SURFACE — the tagger sometimes hands `muito`/
+    // `mais` a determiner or noun reading, and the grading relation must not
+    // care.
+    const degreeWord =
+      input.syntax.intensifiers.includes(lower) || input.syntax.degreeAdverbs.includes(lower)
+
+    const next = input.tokens[ti + 1]
+    const gradesAdjective =
+      degreeWord && next !== undefined && next.role === "content" && next.tagged.pos === "ADJ"
+
+    switch (gradesAdjective) {
+      case true:
+        relations.push(relation("degree-of", ti, ti + 1, "heuristic"))
+        return
+      case false:
+        break
+    }
+
+    switch (token.tagged.pos === "ADV" && degreeWord === false && functionAdverb(lower, input.syntax) === false) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const host = adverbHost(input, ti)
+
+    switch (host.kind) {
+      case "none":
+        return
+      case "some":
+        relations.push(relation("advmod-of", ti, host.value, "heuristic"))
+        return
+    }
+  })
+}
+
+function functionAdverb(lower: string, syntax: SyntaxData): boolean {
+  return (
+    syntax.negators.includes(lower) ||
+    syntax.relativePronouns.includes(lower) ||
+    syntax.relativePlaceAdverbs.includes(lower) ||
+    syntax.subordinators.includes(lower) ||
+    syntax.complementizers.includes(lower) ||
+    syntax.thanMarkers.includes(lower) ||
+    syntax.timeConnectives.some((c) => c.form === lower) ||
+    syntax.discourseMarkers.some((c) => c.form === lower) ||
+    syntax.interrogativeAdverbs.includes(lower)
+  )
+}
+
+// The verb an adverb rides: the VP ending directly at it wins (`correu
+// rapidamente`), else the VP starting within two tokens after it (`sempre
+// escrevia`, `nunca mais voltou`), else the nearest preceding VP.
+function adverbHost(input: RelationInput, ti: number): Optional<number> {
+  const trailing = input.chunks.find((c) => c.kind === "VP" && c.to === ti)
+
+  switch (trailing === undefined) {
+    case false:
+      return { kind: "some", value: trailing!.head }
+    case true:
+      break
+  }
+
+  const leading = input.chunks.find((c) => c.kind === "VP" && c.from > ti && c.from <= ti + 3)
+
+  switch (leading === undefined) {
+    case false:
+      return { kind: "some", value: leading!.head }
+    case true:
+      break
+  }
+
+  return lastVpHeadEndingBefore(input, ti)
+}
+
+function lastVpHeadEndingBefore(input: RelationInput, ti: number): Optional<number> {
+  let best: Optional<number> = { kind: "none" }
+
+  for (const chunk of input.chunks) {
+    switch (chunk.kind === "VP" && chunk.to <= ti) {
+      case true:
+        best = { kind: "some", value: chunk.head }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
+}
+
+// The superlative's comparison set: `o mais alto DA CIDADE`, `the tallest
+// OF THE TOWN` — a definite degree phrase (article + degree adverb + ADJ, or
+// an en SUP-marked adjective) whose following genitive names the domain.
+function addSuperlativeDomains(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    switch (token.role === "content" && token.tagged.pos === "ADJ") {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const analytic =
+      ti >= 2 &&
+      hasDegreeAdverb(input, ti - 1) &&
+      tokenLower(input.tokens[ti - 2]!) !== null &&
+      input.syntax.definiteArticles.includes(tokenLower(input.tokens[ti - 2]!)!)
+
+    const morphological = contentFeat(token).startsWith("SUP")
+
+    switch (analytic || morphological) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const opener = input.tokens[ti + 1]
+    const openerLower = opener === undefined ? null : tokenLower(opener)
+
+    switch (openerLower !== null && input.syntax.genitiveMarkers.includes(openerLower!)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    // The genitive may itself open the domain's chunk (`da cidade` is a PP
+    // from ti+1), so the search starts at the marker.
+    const domain = firstChunkFrom(input.chunks, ti + 1)
+
+    switch (domain.kind) {
+      case "none":
+        return
+      case "some": {
+        const chunk = input.chunks[domain.value]!
+
+        switch (punctuationBetween(input.tokens, ti + 1, chunk.from)) {
+          case true:
+            return
+          case false:
+            relations.push(relation("compared-to", chunk.head, ti, "heuristic"))
+            return
+        }
+      }
+    }
+  })
+}
+
+// The object predicative: for a declared verb (`achar`, `deixar`, `find`,
+// `leave`), an adjective trailing the object predicates the OBJECT — `achou
+// a casa VAZIA` found it empty, it did not find an empty house. The
+// adjective sits inside the object NP in Portuguese (the trailing-ADJ chunk
+// slot) or directly after it in English.
+function addObjectPredicatives(relations: Relation[], input: RelationInput): void {
+  for (const r of [...relations]) {
+    switch (r.kind === "object-of") {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const verb = input.tokens[r.head]!
+
+    switch (verb.role === "content" && input.syntax.objectPredicativeVerbs.includes(verb.tagged.lemma)) {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    const np = input.chunks.find((c) => c.kind === "NP" && c.head === r.dependent)
+
+    switch (np === undefined) {
+      case true:
+        continue
+      case false:
+        break
+    }
+
+    const inside = lastAdjectiveIn(input, np!.head + 1, np!.to)
+
+    switch (inside.kind) {
+      case "some":
+        relations.push(relation("predicative-of", inside.value, r.dependent, "heuristic"))
+        continue
+      case "none":
+        break
+    }
+
+    const after = input.tokens[np!.to]
+
+    switch (after !== undefined && after!.role === "content" && after!.tagged.pos === "ADJ") {
+      case true:
+        relations.push(relation("predicative-of", np!.to, r.dependent, "heuristic"))
+        continue
+      case false:
+        continue
+    }
+  }
+}
+
+function lastAdjectiveIn(input: RelationInput, from: number, to: number): Optional<number> {
+  let best: Optional<number> = { kind: "none" }
+
+  for (let at = from; at < to; at++) {
+    const token = input.tokens[at]!
+
+    switch (token.role === "content" && token.tagged.pos === "ADJ") {
+      case true:
+        best = { kind: "some", value: at }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
+}
+
+// The role predicate: a declared role marker after a verb hands its noun to
+// the verb's subject as a ROLE — `trabalhava como DETETIVE`, `worked as a
+// DETECTIVE`.
+function addRolePredicates(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    const lower = tokenLower(token)
+
+    switch (lower !== null && input.syntax.roleMarkers.includes(lower!)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const vp = lastVpEndingBefore(input, ti)
+
+    switch (vp.kind) {
+      case "none":
+        return
+      case "some":
+        break
+    }
+
+    const np = firstChunkFrom(input.chunks, ti + 1)
+
+    switch (np.kind) {
+      case "none":
+        return
+      case "some":
+        break
+    }
+
+    const chunk = input.chunks[np.value]!
+    const head = input.tokens[chunk.head]!
+
+    const nominal =
+      chunk.kind === "NP" &&
+      head.role === "content" &&
+      head.tagged.pos === "NOUN" &&
+      punctuationBetween(input.tokens, ti + 1, chunk.from) === false
+
+    switch (nominal) {
+      case true: {
+        // The role noun is not the verb's object — displace the positional
+        // guess (`trabalhava como detetive` works AS one, takes no one).
+        for (let k = relations.length - 1; k >= 0; k--) {
+          const existing = relations[k]!
+
+          switch (existing.kind === "object-of" && existing.dependent === chunk.head && existing.head === vp.value) {
+            case true:
+              relations.splice(k, 1)
+              continue
+            case false:
+              continue
+          }
+        }
+
+        relations.push(relation("role-of", chunk.head, vp.value, "heuristic"))
+        return
+      }
+      case false:
+        return
+    }
+  })
+}
+
+function lastVpEndingBefore(input: RelationInput, ti: number): Optional<number> {
+  let best: Optional<number> = { kind: "none" }
+
+  for (const chunk of input.chunks) {
+    switch (chunk.kind === "VP" && chunk.to <= ti) {
+      case true:
+        best = { kind: "some", value: chunk.head }
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return best
+}
+
+// The purpose infinitive: `saiu PARA COMPRAR pão` — a declared purpose
+// marker followed by an infinitive binds it to the matrix as its goal. In
+// English every infinitive wears `to`, so the rule additionally demands an
+// object-REJECTING matrix (`went to buy bread` fires; `wanted to leave` is a
+// complement, not a purpose).
+function addPurposeInfinitives(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    const lower = tokenLower(token)
+
+    switch (lower !== null && input.syntax.purposeMarkers.includes(lower!)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const verbAt = ti + 1
+    const verb = input.tokens[verbAt]
+
+    switch (verb !== undefined && verb!.role === "content" && verb!.tagged.pos === "VERB") {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const marked = isInfinitive(verb as AnalyzedToken, input.syntax.verbFeats)
+    const bare = input.syntax.verbFeats.infinitivePrefixes.length === 0
+
+    switch (marked || bare) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    const matrix = lastVpEndingBefore(input, ti)
+
+    switch (matrix.kind) {
+      case "none":
+        return
+      case "some":
+        break
+    }
+
+    switch (bare && takesObject(verbLemma(input.tokens, vpOfHead(input, matrix.value)), input.syntax.valency)) {
+      case true:
+        return
+      case false:
+        relations.push(relation("purpose-of", verbAt, matrix.value, "heuristic"))
+        return
+    }
+  })
+}
+
+function vpOfHead(input: RelationInput, head: number): Chunk {
+  const found = input.chunks.find((c) => c.kind === "VP" && c.head === head)
+
+  switch (found === undefined) {
+    case true:
+      return { kind: "VP", from: head, to: head + 1, head }
+    case false:
+      return found!
+  }
+}
+
+// The interval adjunct, by token scan (chunking splits `por dois anos`
+// unhelpfully): a duration marker with a temporal noun within reach binds
+// that noun to the nearest preceding verb as duration-of, displacing any
+// point-in-time reading other passes minted for the phrase.
+function addDurationOpeners(relations: Relation[], input: RelationInput): void {
+  input.tokens.forEach((token, ti) => {
+    const lower = tokenLower(token)
+
+    switch (lower !== null && input.syntax.durationMarkers.includes(lower!)) {
+      case false:
+        return
+      case true:
+        break
+    }
+
+    for (let at = ti + 1; at <= ti + 3 && at < input.tokens.length; at++) {
+      const candidate = input.tokens[at]!
+
+      switch (candidate.role) {
+        case "punctuation":
+          return
+        case "content":
+          break
+      }
+
+      switch (input.syntax.temporalNouns.includes(candidate.tagged.lemma.toLowerCase())) {
+        case false:
+          continue
+        case true:
+          break
+      }
+
+      const vp = lastVpHeadEndingBefore(input, ti)
+
+      switch (vp.kind) {
+        case "none":
+          return
+        case "some":
+          break
+      }
+
+      for (let k = relations.length - 1; k >= 0; k--) {
+        const existing = relations[k]!
+
+        const stale =
+          (existing.kind === "temporal-of" || existing.kind === "modifier-of") &&
+          existing.dependent >= ti &&
+          existing.dependent <= at
+
+        switch (stale) {
+          case true:
+            relations.splice(k, 1)
+            continue
+          case false:
+            continue
+        }
+      }
+
+      relations.push(relation("duration-of", at, vp.value, "heuristic"))
+      return
+    }
+  })
+}
+
+// A fronted adjunct interrogative binds to the clause's verb: `ONDE ele
+// mora?`, `WHY did she leave?` — advmod-of, the same edge a bound adverb
+// earns.
+function addWhAdjuncts(relations: Relation[], input: RelationInput): void {
+  switch (isInterrogative(input.tokens)) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const first = firstContentIndex(input.tokens)
+
+  switch (first >= 0) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const lower = tokenLower(input.tokens[first]!)
+
+  switch (lower !== null && input.syntax.interrogativeAdverbs.includes(lower!)) {
+    case false:
+      return
+    case true:
+      break
+  }
+
+  const vp = input.chunks.find((c) => c.kind === "VP")
+
+  switch (vp === undefined) {
+    case true:
+      return
+    case false:
+      relations.push(relation("advmod-of", first, vp!.head, "heuristic"))
+      return
+  }
+}
+
 // The polarity pass: a declared negator riding a VP (inside it before the
 // head — `did not see` — or directly before it across at most adverbs —
 // `não era`, `nunca mais voltou`) flips every relation that VP heads, and
@@ -3096,6 +3770,27 @@ function applyPolarity(relations: readonly Relation[], input: RelationInput): re
         break
       case false:
         break
+    }
+  }
+
+  // Negation also arrives from ARGUMENT position: `Ninguém veio`, `nothing
+  // remained`, `no cat came` — a negative indefinite inside any dependent's
+  // chunk (or directly before the verb) flips the clause. Concord for free:
+  // `não vi nada` is already negated once, and once is all polarity carries.
+  for (const r of relations) {
+    switch (r.kind === "subject-of" || r.kind === "object-of" || r.kind === "dative-of") {
+      case false:
+        continue
+      case true:
+        break
+    }
+
+    switch (negativeIndefiniteAt(input, r.dependent)) {
+      case true:
+        negated.add(r.head)
+        continue
+      case false:
+        continue
     }
   }
 
@@ -3170,6 +3865,28 @@ function isNegator(input: RelationInput, at: number): boolean {
   const lower = tokenLower(input.tokens[at]!)
 
   return lower !== null && input.syntax.negators.includes(lower)
+}
+
+// The dependent token, or any token of the chunk holding it, is a declared
+// negative indefinite (`nenhum` sits inside the NP whose head subjects the
+// verb).
+function negativeIndefiniteAt(input: RelationInput, dependent: number): boolean {
+  const holder = input.chunks.find((c) => dependent >= c.from && dependent < c.to)
+  const from = holder === undefined ? dependent : holder.from
+  const to = holder === undefined ? dependent + 1 : holder.to
+
+  for (let at = from; at < to; at++) {
+    const lower = tokenLower(input.tokens[at]!)
+
+    switch (lower !== null && input.syntax.negativeIndefinites.includes(lower!)) {
+      case true:
+        return true
+      case false:
+        continue
+    }
+  }
+
+  return false
 }
 
 function isVerbToken(token: AnalyzedToken): boolean {

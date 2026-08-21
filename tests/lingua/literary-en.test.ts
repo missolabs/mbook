@@ -486,3 +486,35 @@ describe("the timeline in English", () => {
     expect(edgeWords("She wept while the rain fell.")).toEqual(["during:wept->fell:connective"])
   })
 })
+
+describe("modals, reports and negatives in English", () => {
+  it("a modal's complement folds off the timeline", () => {
+    const could = only("She could leave.")
+
+    expect(tagged(could, "leave").pos).toBe("VERB")
+    expect(relation(could, "complement-of", "leave", "could")).toBeDefined()
+
+    const wanted = only("He wanted to leave.")
+
+    expect(relation(wanted, "complement-of", "leave", "wanted")).toBeDefined()
+  })
+
+  it("a thought-that clause is reported, not asserted", () => {
+    const analysis = analyze("She thought that he left.")
+
+    const lanes = analysis.timeline.events.map((e) => {
+      const t = analysis.sentences[e.sentence]!.tokens[e.token]!
+      const w = t.role === "content" ? t.tagged.token.text : "?"
+
+      return `${w}:${e.lane}`
+    })
+
+    expect(lanes).toEqual(["thought:narrative", "left:reported"])
+  })
+
+  it("nothing flips polarity from subject position", () => {
+    const sentence = only("Nothing remained.")
+
+    expect(relation(sentence, "subject-of", "Nothing", "remained").polarity).toBe("negative")
+  })
+})

@@ -285,6 +285,49 @@ export const EN_SYNTAX: SyntaxData = {
     { form: "if", edge: "none" },
     { form: "unless", edge: "none" },
   ],
+  subordinatorSenses: [
+    { form: "when", sense: "temporal" },
+    { form: "once", sense: "temporal" },
+    { form: "while", sense: "temporal" },
+    { form: "until", sense: "temporal" },
+    { form: "because", sense: "causal" },
+    { form: "since", sense: "causal" },
+    { form: "if", sense: "conditional" },
+    { form: "unless", sense: "conditional" },
+    { form: "although", sense: "concessive" },
+    { form: "though", sense: "concessive" },
+  ],
+  discourseMarkers: [
+    { form: "but", sense: "contrast" },
+    { form: "however", sense: "contrast" },
+    { form: "yet", sense: "contrast" },
+    { form: "so", sense: "consequence" },
+    { form: "therefore", sense: "consequence" },
+    { form: "thus", sense: "consequence" },
+  ],
+  // English weather verbs take the expletive (`it rained`), so the
+  // impersonal excuse never needs them; the list stays honest anyway.
+  weatherVerbs: ["rain", "snow", "drizzle", "thunder"],
+  negativeIndefinites: ["nobody", "nothing", "none", "no", "nowhere", "neither"],
+  modalVerbs: ["can", "could", "may", "might", "must", "shall", "should", "would", "want", "wish", "try"],
+  reportingVerbs: ["think", "believe", "imagine", "suppose", "doubt", "hope", "seem"],
+  factiveVerbs: ["know", "remember", "realize", "notice", "discover", "admit"],
+  intensifiers: ["very", "so", "quite", "almost", "rather", "too", "really"],
+  roleMarkers: ["as"],
+  // The purpose infinitive is gated on an object-rejecting matrix (`went to
+  // buy bread`); a complement-taking verb's `to` is its complement, not a
+  // purpose.
+  purposeMarkers: ["to"],
+  durationMarkers: ["for", "during"],
+  interrogativeAdverbs: ["where", "when", "how", "why"],
+  personTitles: ["Mr", "Mrs", "Ms", "Miss", "Dr", "Prof", "Sir", "Lady", "Lord"],
+  personHeadNouns: [
+    "man", "woman", "boy", "girl", "detective", "doctor", "writer", "poet",
+    "friend", "neighbor", "neighbour", "stranger", "gentleman", "sailor",
+  ],
+  animalHeadNouns: ["cat", "dog", "bird", "horse", "fish"],
+  organizationHeadNouns: ["company", "firm", "band", "newspaper", "bank", "shop"],
+  objectPredicativeVerbs: ["find", "leave", "make", "keep", "consider", "paint"],
   // AGID/Moby codes: PAST, 3SG and FIN are finite ("PAST" also prefixes
   // PASTPART — an accepted over-match, since a participle-only homograph with a
   // noun reading is vanishingly rare). The English infinitive is the bare base

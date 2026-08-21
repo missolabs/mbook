@@ -52,6 +52,7 @@ export type SentenceRow = {
   col: number
   attributionKind: string
   attributionSlug: Optional<string>
+  sentenceType: string
   tokens: readonly TokenRow[]
   chunks: readonly ChunkRow[]
   relations: readonly RelationRow[]
@@ -107,6 +108,16 @@ export type EntityRow = {
   mentions: number
 }
 
+export type AliasRow = {
+  slug: string
+  description: string
+}
+
+export type TurnGuessRow = {
+  paragraphIdx: number
+  slug: string
+}
+
 export type AnalysisRows = {
   characters: readonly CharacterRow[]
   sentences: readonly SentenceRow[]
@@ -115,6 +126,8 @@ export type AnalysisRows = {
   timelineEvents: readonly TimelineEventRow[]
   timelineEdges: readonly TimelineEdgeRow[]
   entities: readonly EntityRow[]
+  aliases: readonly AliasRow[]
+  turnGuesses: readonly TurnGuessRow[]
 }
 
 export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
@@ -198,10 +211,12 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
   }
 
   const entities = analysis.entities.map((e) => ({ name: e.name, kind: e.kind, mentions: e.mentions }))
+  const aliases = analysis.aliases.map((a) => ({ slug: a.slug, description: a.description }))
+  const turnGuesses = analysis.turnGuesses.map((t) => ({ paragraphIdx: t.paragraph, slug: t.slug }))
 
   const spans = analysis.spans.map(spanRow)
 
-  return { characters, sentences, spans, discourseLinks, timelineEvents, timelineEdges, entities }
+  return { characters, sentences, spans, discourseLinks, timelineEvents, timelineEdges, entities, aliases, turnGuesses }
 }
 
 function sentenceRow(sentence: Sentence, location: SentenceLocation, paragraphIdx: number, idx: number): SentenceRow {
@@ -219,6 +234,7 @@ function sentenceRow(sentence: Sentence, location: SentenceLocation, paragraphId
     col: location.col,
     attributionKind: parts.kind,
     attributionSlug: parts.slug,
+    sentenceType: sentence.sentenceType,
     tokens: sentence.tokens.map(tokenRow),
     chunks: sentence.chunks.map((chunk, ci) => ({
       idx: ci,

@@ -108,6 +108,16 @@ export type SubordinatorTime = {
   edge: "sub-before-matrix" | "sub-meets-matrix" | "matrix-during-sub" | "matrix-meets-sub" | "none"
 }
 
+export type SubordinatorSense = {
+  form: string
+  sense: string
+}
+
+export type DiscourseMarker = {
+  form: string
+  sense: "contrast" | "consequence"
+}
+
 export type AnaphorHint = {
   form: string
   feat: string
@@ -147,6 +157,23 @@ export type SyntaxData = {
   placeHeadNouns: string[]
   timeConnectives: TimeConnective[]
   subordinatorTime: SubordinatorTime[]
+  subordinatorSenses: SubordinatorSense[]
+  discourseMarkers: DiscourseMarker[]
+  weatherVerbs: string[]
+  negativeIndefinites: string[]
+  modalVerbs: string[]
+  reportingVerbs: string[]
+  factiveVerbs: string[]
+  intensifiers: string[]
+  roleMarkers: string[]
+  purposeMarkers: string[]
+  durationMarkers: string[]
+  interrogativeAdverbs: string[]
+  personTitles: string[]
+  personHeadNouns: string[]
+  animalHeadNouns: string[]
+  organizationHeadNouns: string[]
+  objectPredicativeVerbs: string[]
   verbFeats: VerbFeatMarks
 }
 
