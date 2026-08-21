@@ -5,20 +5,23 @@
 // visible line at a time (scanLine) while the whole-book projection (scanGlyphs)
 // lifts those line-relative offsets to doc-absolute positions.
 //
-// The four constructs (v3 syntax):
+// The five constructs (v4 syntax):
 //   @[Name]            visible mention   — display is the name; `@[` and `]` hide
 //   {display}[Name]    display group     — display is the group; `{`,`}`,`[Name]` hide
 //   —[Name] ...        bound dialogue    — speech; `[Name]` hides, the space
 //                      stays so the page keeps the conventional `— Olá.`
 //   —...               bare dialogue     — speech, speaker unknown; nothing hides
 //   “[Name] ...”       written quote     — the run is character-written; `[Name] ` hides
+//   ~[value]           time pin          — an authored temporal anchor (`~[1994]`,
+//                      `~[+3 anos]`, `~[antes]`); the WHOLE glyph hides — time
+//                      metadata is not typeset. Its payload rides `text`.
 // A bare `[qualquer coisa]` in prose is ordinary text: the `[Name]` binding is
 // recognized ONLY in the anchored positions above, never on its own.
 
 import type { Cast, Resolution } from "./cast"
 import { resolve } from "./cast"
 
-export type GlyphKind = "subject-mention" | "speech" | "character-written"
+export type GlyphKind = "subject-mention" | "speech" | "character-written" | "time-anchor"
 
 export type Range = { from: number; to: number }
 
@@ -180,8 +183,43 @@ function classifyAt(text: string, index: number, cast: Cast): Step {
       return atQuote(text, index, "”", cast)
     case "\"":
       return atQuote(text, index, "\"", cast)
+    case "~":
+      return atTimeAnchor(text, index)
     default:
       return { kind: "advance", next: index + 1 }
+  }
+}
+
+// `~[value]` — the authored time pin. Everything hides, one trailing space
+// included; the payload travels in `text` (a time pin has no display and no
+// character binding).
+function atTimeAnchor(text: string, index: number): Step {
+  switch (text[index + 1] === "[") {
+    case false:
+      return { kind: "advance", next: index + 1 }
+    case true:
+      break
+  }
+
+  const bracket = readBracket(text, index + 1)
+
+  switch (bracket.kind) {
+    case "none":
+      return { kind: "advance", next: index + 1 }
+    case "some": {
+      const to = extendSpace(text, bracket.close + 1)
+
+      const span: LineSpan = {
+        kind: "time-anchor",
+        from: index,
+        to,
+        hidden: [{ from: index, to }],
+        text: bracket.name,
+        binding: { kind: "unknown" },
+      }
+
+      return { kind: "emit", span, next: to }
+    }
   }
 }
 

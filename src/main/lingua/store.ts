@@ -160,6 +160,14 @@ CREATE TABLE turn_guesses (
   paragraph_idx INTEGER NOT NULL,
   slug TEXT NOT NULL
 );
+CREATE TABLE diagnostics (
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  paragraph_idx INTEGER NOT NULL,
+  sentence_idx INTEGER NOT NULL,
+  token_idx INTEGER NOT NULL,
+  detail TEXT NOT NULL
+);
 `
 
 type Db = InstanceType<typeof Database>
@@ -179,7 +187,7 @@ export function openLinguaStore(path: string): Result<LinguaStore, StoreError> {
   }
 }
 
-const VERSION = 7
+const VERSION = 8
 
 function migrate(db: Db): void {
   const version = currentVersion(db)
@@ -192,6 +200,7 @@ function migrate(db: Db): void {
   }
 
   db.exec(`
+DROP TABLE IF EXISTS diagnostics;
 DROP TABLE IF EXISTS turn_guesses;
 DROP TABLE IF EXISTS alias_mentions;
 DROP TABLE IF EXISTS timeline_anchors;
@@ -266,6 +275,9 @@ function store(db: Db): LinguaStore {
   )
   const insertAliasMention = db.prepare(
     "INSERT INTO alias_mentions (book_id, sentence_id, token_idx, slug) VALUES (?, ?, ?, ?)",
+  )
+  const insertDiagnostic = db.prepare(
+    "INSERT INTO diagnostics (book_id, kind, paragraph_idx, sentence_idx, token_idx, detail) VALUES (?, ?, ?, ?, ?, ?)",
   )
 
   const writeAll = db.transaction((record: BookRecord, rows: AnalysisRows) => {
@@ -343,6 +355,10 @@ function store(db: Db): LinguaStore {
 
     for (const guess of rows.turnGuesses) {
       insertTurnGuess.run(bookId, guess.paragraphIdx, guess.slug)
+    }
+
+    for (const d of rows.diagnostics) {
+      insertDiagnostic.run(bookId, d.kind, d.paragraphIdx, d.sentenceIdx, d.tokenIdx, d.detail)
     }
   })
 

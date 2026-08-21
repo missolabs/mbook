@@ -137,3 +137,31 @@ describe("scanGlyphs", () => {
     ])
   })
 })
+
+describe("time pins", () => {
+  const cast = { characters: [{ name: "João", slug: "joao" }] }
+
+  it("scans ~[value] as a fully hidden anchor carrying its payload", () => {
+    const spans = scanLine("~[1994] João chegou.", cast)
+
+    expect(spans.length).toBe(1)
+
+    const pin = spans[0]!
+
+    expect(pin.kind).toBe("time-anchor")
+    expect(pin.text).toBe("1994")
+
+    // Everything hides, the trailing space included: the page never
+    // typesets time metadata.
+    expect(pin.hidden).toEqual([{ from: 0, to: 8 }])
+  })
+
+  it("relative and retreat payloads scan the same way", () => {
+    expect(scanLine("~[+3 anos] Depois.", cast)[0]!.text).toBe("+3 anos")
+    expect(scanLine("~[antes] Antes.", cast)[0]!.text).toBe("antes")
+  })
+
+  it("a bare tilde is ordinary prose", () => {
+    expect(scanLine("~ nada aqui", cast)).toEqual([])
+  })
+})

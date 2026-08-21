@@ -50,6 +50,8 @@ export type TimelineEvent = {
 export type TimelineEdgeKind = "before" | "meets" | "during" | "overlaps"
 
 export type TimelineProvenance =
+  // An authored `~[...]` time pin ordered these events — the strongest edge.
+  | "pinned"
   | "narrative-advance"
   | "tense-anaphora"
   | "connective"
@@ -82,11 +84,15 @@ export type Timeline = {
   events: readonly TimelineEvent[]
   edges: readonly TimelineEdge[]
   anchors: readonly TimelineAnchor[]
+  // Authored time pins (`~[1994]`, `~[antes]`) scanned in this paragraph, in
+  // order — the driver's stitching reads the first one.
+  pins: readonly string[]
 }
 
 export type TimelineInput = {
   sentences: readonly Sentence[]
   syntax: SyntaxData
+  pins: readonly string[]
 }
 
 type Anchor = { sentence: number; token: number }
@@ -293,7 +299,7 @@ export function buildTimeline(input: TimelineInput): Timeline {
     }
   })
 
-  return { events, edges, anchors: calendarAnchors(input) }
+  return { events, edges, anchors: calendarAnchors(input), pins: input.pins }
 }
 
 function aspectOf(sentence: Sentence, head: number, syntax: SyntaxData): string {

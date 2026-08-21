@@ -27,6 +27,35 @@ export function buildCast(doc: BookDoc): Cast {
   return { characters }
 }
 
+// The book's declared world beyond its people: `place:` and `object:`
+// frontmatter lines register the geography and the story-significant things
+// (`place: B Bar`, `object: caderno`) — authored entity typing, the same
+// declaration pattern `character:` set.
+export type Declarations = {
+  places: readonly string[]
+  objects: readonly string[]
+}
+
+export function buildDeclarations(doc: BookDoc): Declarations {
+  const places: string[] = []
+  const objects: string[] = []
+
+  for (const [key, value] of frontmatterFields(doc)) {
+    switch (key) {
+      case "place":
+        places.push(value)
+        continue
+      case "object":
+        objects.push(value)
+        continue
+      default:
+        continue
+    }
+  }
+
+  return { places, objects }
+}
+
 // Match a written name against the declared cast, case- and diacritic-
 // insensitively (so `joão`, `JOÃO` and `João` all bind the same character). An
 // undeclared name is unresolved, never an error — the app never bothers the

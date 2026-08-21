@@ -391,6 +391,85 @@ describe("aliases, turns and chapter boundaries", () => {
   })
 })
 
+describe("authored time pins, declarations and the lint surface", () => {
+  const BOOK = [
+    "---",
+    "language: pt-BR",
+    "character: Rei",
+    "place: B Bar",
+    "object: caderno",
+    "---",
+    "",
+    "## ",
+    "",
+    "Rei chegou ao B Bar. Abriu o caderno.",
+    "",
+    "~[antes] Rei comprou o caderno na cidade.",
+    "",
+    "## ",
+    "",
+    "~[1994] Rei escreveu a primeira linha.",
+  ].join("\n")
+
+  it("a retreat pin reverses the stitch, an absolute pin crosses the chapter", () => {
+    const analysis = analyze(BOOK, BOTH)
+
+    expect(analysis.timelineEdges).toMatchObject([
+      // ~[antes]: the buying precedes the arrival scene.
+      { fromParagraph: 1, toParagraph: 0, kind: "before", provenance: "pinned" },
+      // ~[1994]: authored, so the chapter break stitches after all.
+      { fromParagraph: 1, toParagraph: 2, kind: "before", provenance: "pinned" },
+    ])
+  })
+
+  it("the pin payload rides the paragraph's timeline", () => {
+    const analysis = analyze(BOOK, BOTH)
+
+    expect(analysis.paragraphs[1]!.analysis.timeline.pins).toEqual(["antes"])
+    expect(analysis.paragraphs[2]!.analysis.timeline.pins).toEqual(["1994"])
+  })
+
+  it("declared places and objects are entities by authorship", () => {
+    const analysis = analyze(BOOK, BOTH)
+    const byName = new Map(analysis.entities.map((e) => [e.name, e]))
+
+    expect(byName.get("B Bar")).toMatchObject({ kind: "place", mentions: 1 })
+    expect(byName.get("caderno")).toMatchObject({ kind: "object", mentions: 2 })
+  })
+
+  it("the compiler asks: contested tokens and unpinned chapter breaks surface", () => {
+    const noPin = [
+      "---",
+      "language: pt-BR",
+      "character: Rei",
+      "---",
+      "",
+      "## ",
+      "",
+      "Rei chegou ao bar.",
+      "",
+      "## ",
+      "",
+      "Rei saiu do bar.",
+    ].join("\n")
+
+    const analysis = analyze(noPin, BOTH)
+    const kinds = analysis.diagnostics.map((d) => d.kind)
+
+    expect(kinds).toContain("unstitched-chapter")
+
+    const contested = analyze("Casa é boa.", BOTH)
+
+    expect(contested.diagnostics.some((d) => d.kind === "contested-token" && d.detail === "Casa")).toBe(true)
+  })
+
+  it("a dangling pronoun surfaces as a diagnostic", () => {
+    const analysis = analyze("Vi Mizoguchi no mercado. Ela sorriu.", BOTH)
+
+    expect(analysis.diagnostics.some((d) => d.kind === "unresolved-pronoun" && d.detail === "Ela")).toBe(true)
+  })
+})
+
 describe("the timeline crosses paragraph breaks", () => {
   it("the last perfective of one paragraph precedes the first of the next", () => {
     const book = [

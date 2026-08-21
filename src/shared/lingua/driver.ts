@@ -14,8 +14,8 @@
 // subtracting the paragraph's start offset — the two coordinate systems line up
 // exactly because both count the newline as one character.
 
-import { buildCast } from "../book/cast"
-import type { Cast } from "../book/cast"
+import { buildCast, buildDeclarations } from "../book/cast"
+import type { Cast, Declarations } from "../book/cast"
 import type { Binding, GlyphSpan, LineSpan } from "../book/glyphs"
 import { scanGlyphs } from "../book/glyphs"
 import { chapterAtLine, chapterList } from "../book/outline"
@@ -92,7 +92,7 @@ export type BookTimelineEdge = {
 //      organization, `o detetive Y` person;
 //   3. place — a locative adposition governs it (`no B Bar`), unless the
 //      mention sits inside quote marks (a quoted title names no geography).
-export type EntityKind = "person" | "animal" | "organization" | "place" | "unknown"
+export type EntityKind = "person" | "animal" | "organization" | "place" | "object" | "unknown"
 
 export type NamedEntity = {
   name: string
@@ -114,6 +114,7 @@ export type BookAnalysis = {
   // resolve through.
   aliases: readonly CharacterAlias[]
   aliasMentions: readonly AliasMention[]
+  diagnostics: readonly Diagnostic[]
   // Unattributed dialogue turns guessed by ALTERNATION: in a run between
   // exactly two attributed speakers, consecutive turns alternate.
   turnGuesses: readonly TurnGuess[]
@@ -138,6 +139,24 @@ export type AliasMention = {
 export type TurnGuess = {
   paragraph: number
   slug: string
+}
+
+// The compiler's honest uncertainty, addressed to the author: every
+// load-bearing guess and every unresolved reference, with the glyph or
+// declaration that would settle it. This is the lint surface — the engine
+// asks, the author pins, ambiguity burns down.
+export type DiagnosticKind =
+  | "contested-token"
+  | "unresolved-name"
+  | "unresolved-pronoun"
+  | "unstitched-chapter"
+
+export type Diagnostic = {
+  kind: DiagnosticKind
+  paragraph: number
+  sentence: number
+  token: number
+  detail: string
 }
 
 export type BookAnalysisError = { kind: "lexicon-unavailable"; language: Language }
@@ -173,6 +192,8 @@ export function analyzeBook(
   )
 
   const aliases = collectAliases(paragraphs, cast)
+  const declarations = buildDeclarations(doc)
+  const bookLinks = crossParagraphLinks(paragraphs, lexicon.value)
 
   return ok({
     language,
@@ -180,13 +201,111 @@ export function analyzeBook(
     paragraphs,
     spans,
     unresolved: unresolvedNames(spans),
-    bookLinks: crossParagraphLinks(paragraphs, lexicon.value),
-    entities: nameEntities(paragraphs, cast, lexicon.value),
+    bookLinks,
+    entities: nameEntities(paragraphs, cast, lexicon.value, declarations),
     timelineEdges: stitchTimelines(paragraphs),
     aliases,
     aliasMentions: resolveAliasMentions(paragraphs, aliases, lexicon.value),
     turnGuesses: guessTurns(paragraphs, cast),
+    diagnostics: collectDiagnostics(paragraphs, lexicon.value, bookLinks),
   })
+}
+
+// ─── diagnostics ─────────────────────────────────────────────────────────────
+function collectDiagnostics(
+  paragraphs: readonly ParagraphSlot[],
+  lexicon: Lexicon,
+  bookLinks: readonly BookLink[],
+): readonly Diagnostic[] {
+  const out: Diagnostic[] = []
+
+  for (const slot of paragraphs) {
+    slot.analysis.sentences.forEach((sentence, si) => {
+      sentence.tokens.forEach((token, ti) => {
+        switch (token.role) {
+          case "punctuation":
+            return
+          case "content":
+            break
+        }
+
+        switch (token.tagged.provenance === "contested") {
+          case true:
+            out.push({ kind: "contested-token", paragraph: slot.index, sentence: si, token: ti, detail: token.tagged.token.text })
+            break
+          case false:
+            break
+        }
+
+        const lower = token.tagged.token.text.toLowerCase()
+        const anaphor = lexicon.syntax.anaphoricPronouns.some((a) => a.form === lower)
+        const articleShaped = lexicon.syntax.definiteArticles.includes(lower)
+
+        switch (anaphor && articleShaped === false) {
+          case false:
+            return
+          case true:
+            break
+        }
+
+        const linked =
+          slot.analysis.discourse.some(
+            (d) => d.kind === "anaphora" && d.fromSentence === si && d.fromToken === ti,
+          ) ||
+          bookLinks.some(
+            (l) => l.kind === "anaphora" && l.fromParagraph === slot.index && l.fromSentence === si && l.fromToken === ti,
+          )
+
+        switch (linked) {
+          case true:
+            return
+          case false:
+            out.push({ kind: "unresolved-pronoun", paragraph: slot.index, sentence: si, token: ti, detail: token.tagged.token.text })
+            return
+        }
+      })
+    })
+
+    for (const anchored of slot.analysis.spans) {
+      const named =
+        anchored.span.binding.kind === "unresolved" && anchored.anchor.kind === "in-sentence"
+
+      switch (named) {
+        case false:
+          continue
+        case true:
+          out.push({
+            kind: "unresolved-name",
+            paragraph: slot.index,
+            sentence: (anchored.anchor as { sentence: number }).sentence,
+            token: (anchored.anchor as { tokens: readonly number[] }).tokens[0] ?? -1,
+            detail: (anchored.span.binding as { name: string }).name,
+          })
+          continue
+      }
+    }
+  }
+
+  for (let i = 1; i < paragraphs.length; i++) {
+    const prev = paragraphs[i - 1]!
+    const curr = paragraphs[i]!
+
+    const blocked =
+      sameChapter(prev, curr) === false &&
+      curr.analysis.timeline.pins.length === 0 &&
+      lastPerfective(prev.analysis.timeline.events).kind === "some" &&
+      firstPerfective(curr.analysis.timeline.events).kind === "some"
+
+    switch (blocked) {
+      case true:
+        out.push({ kind: "unstitched-chapter", paragraph: curr.index, sentence: 0, token: -1, detail: "chapter break — a ~[...] pin would order it" })
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return out
 }
 
 // Later definite descriptions resolve through the registry: a definite NP
@@ -463,10 +582,16 @@ function stitchTimelines(paragraphs: readonly ParagraphSlot[]): readonly BookTim
     const prev = paragraphs[i - 1]!
     const curr = paragraphs[i]!
 
-    switch (sameChapter(prev, curr)) {
-      case false:
-        continue
+    // An authored `~[...]` pin OVERRIDES the chapter gate and the direction:
+    // a retreat pin (`~[antes]`, `~[-...]`) says this scene precedes the
+    // previous one; anything else orders forward. No pin keeps the honest
+    // default — same-chapter forward stitching only.
+    const pin = curr.analysis.timeline.pins[0]
+
+    switch (pin === undefined && sameChapter(prev, curr) === false) {
       case true:
+        continue
+      case false:
         break
     }
 
@@ -483,6 +608,23 @@ function stitchTimelines(paragraphs: readonly ParagraphSlot[]): readonly BookTim
     const a = (from as { value: TimelineEvent }).value
     const b = (to as { value: TimelineEvent }).value
 
+    switch (pin !== undefined && pinRetreats(pin!)) {
+      case true:
+        out.push({
+          kind: "before",
+          fromParagraph: curr.index,
+          fromSentence: b.sentence,
+          fromToken: b.token,
+          toParagraph: prev.index,
+          toSentence: a.sentence,
+          toToken: a.token,
+          provenance: "pinned",
+        })
+        continue
+      case false:
+        break
+    }
+
     out.push({
       kind: "before",
       fromParagraph: prev.index,
@@ -491,11 +633,17 @@ function stitchTimelines(paragraphs: readonly ParagraphSlot[]): readonly BookTim
       toParagraph: curr.index,
       toSentence: b.sentence,
       toToken: b.token,
-      provenance: "narrative-advance",
+      provenance: pin === undefined ? "narrative-advance" : "pinned",
     })
   }
 
   return out
+}
+
+function pinRetreats(pin: string): boolean {
+  const value = pin.trim().toLowerCase()
+
+  return value === "antes" || value === "before" || value === "earlier" || value.startsWith("-")
 }
 
 function sameChapter(a: ParagraphSlot, b: ParagraphSlot): boolean {
@@ -555,7 +703,12 @@ function lastPerfective(events: readonly TimelineEvent[]): Optional<TimelineEven
 // quoted title names no one and no place.
 type EntityEvidence = { mentions: number; person: number; typed: Map<EntityKind, number>; locative: number }
 
-function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon: Lexicon): readonly NamedEntity[] {
+function nameEntities(
+  paragraphs: readonly ParagraphSlot[],
+  cast: Cast,
+  lexicon: Lexicon,
+  declarations: Declarations,
+): readonly NamedEntity[] {
   const castNames = new Set(cast.characters.map((c) => c.name))
   const tally = new Map<string, EntityEvidence>()
 
@@ -616,12 +769,57 @@ function nameEntities(paragraphs: readonly ParagraphSlot[], cast: Cast, lexicon:
   }
 
   const out: NamedEntity[] = []
+  const declaredPlaces = new Set(declarations.places)
 
   for (const [name, entry] of tally) {
-    out.push({ name, kind: entityKind(entry), mentions: entry.mentions })
+    switch (declaredPlaces.has(name)) {
+      case true:
+        continue
+      case false:
+        out.push({ name, kind: entityKind(entry), mentions: entry.mentions })
+        continue
+    }
+  }
+
+  // Declarations outrank every evidence rule — an authored `place:` IS a
+  // place, mentioned or not; an `object:` is tracked by its lemma across the
+  // whole book.
+  for (const place of declarations.places) {
+    out.push({ name: place, kind: "place", mentions: tally.get(place)?.mentions ?? 0 })
+  }
+
+  for (const object of declarations.objects) {
+    out.push({ name: object, kind: "object", mentions: lemmaMentions(paragraphs, object.toLowerCase()) })
   }
 
   return out
+}
+
+function lemmaMentions(paragraphs: readonly ParagraphSlot[], lemma: string): number {
+  let count = 0
+
+  for (const slot of paragraphs) {
+    for (const sentence of slot.analysis.sentences) {
+      for (const token of sentence.tokens) {
+        switch (token.role) {
+          case "punctuation":
+            continue
+          case "content":
+            break
+        }
+
+        switch (token.tagged.pos === "NOUN" && token.tagged.lemma === lemma) {
+          case true:
+            count++
+            continue
+          case false:
+            continue
+        }
+      }
+    }
+  }
+
+  return count
 }
 
 // Strict precedence, never a vote count: a name that SPEAKS is a person no

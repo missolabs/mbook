@@ -131,7 +131,7 @@ export function analyzeParagraph(input: ParagraphInput): ParagraphAnalysis {
   // Cross-statement dataflow closes the paragraph, and the timeline pass
   // orders its events — the block-local partial order.
   const discourse = linkDiscourse({ sentences, spans, syntax: input.lexicon.syntax })
-  const timeline = buildTimeline({ sentences, syntax: input.lexicon.syntax })
+  const timeline = buildTimeline({ sentences, syntax: input.lexicon.syntax, pins: timePins(input.spans) })
 
   return {
     text: input.text,
@@ -281,6 +281,23 @@ function verbInitialDirective(
     case "some":
       return sense.value === "imperative" || sense.value === "subjunctive"
   }
+}
+
+// The authored `~[...]` payloads of this paragraph, in order.
+function timePins(spans: readonly LineSpan[]): readonly string[] {
+  const out: string[] = []
+
+  for (const span of spans) {
+    switch (span.kind === "time-anchor") {
+      case true:
+        out.push(span.text)
+        continue
+      case false:
+        continue
+    }
+  }
+
+  return out
 }
 
 function sentenceSpan(tokens: readonly SourceToken[]): Span {

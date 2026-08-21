@@ -106,6 +106,14 @@ export type AliasMentionRow = {
   slug: string
 }
 
+export type DiagnosticRow = {
+  kind: string
+  paragraphIdx: number
+  sentenceIdx: number
+  tokenIdx: number
+  detail: string
+}
+
 export type TimelineEdgeRow = {
   fromParagraphIdx: number
   fromSentenceIdx: number
@@ -145,6 +153,7 @@ export type AnalysisRows = {
   turnGuesses: readonly TurnGuessRow[]
   timelineAnchors: readonly TimelineAnchorRow[]
   aliasMentions: readonly AliasMentionRow[]
+  diagnostics: readonly DiagnosticRow[]
 }
 
 export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
@@ -211,6 +220,18 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
       })
     }
 
+    // Authored `~[...]` pins persist as anchors at token -1 of the
+    // paragraph's first sentence, value-prefixed to keep them tellable apart.
+    switch (slot.analysis.sentences.length > 0) {
+      case true:
+        for (const pin of slot.analysis.timeline.pins) {
+          timelineAnchors.push({ paragraphIdx: slot.index, sentenceIdx: 0, tokenIdx: -1, value: `pin:${pin}` })
+        }
+        break
+      case false:
+        break
+    }
+
     for (const e of slot.analysis.timeline.edges) {
       timelineEdges.push({
         fromParagraphIdx: slot.index,
@@ -247,10 +268,17 @@ export function analysisToRows(analysis: BookAnalysis): AnalysisRows {
     tokenIdx: m.token,
     slug: m.slug,
   }))
+  const diagnostics = analysis.diagnostics.map((d) => ({
+    kind: d.kind,
+    paragraphIdx: d.paragraph,
+    sentenceIdx: d.sentence,
+    tokenIdx: d.token,
+    detail: d.detail,
+  }))
 
   const spans = analysis.spans.map(spanRow)
 
-  return { characters, sentences, spans, discourseLinks, timelineEvents, timelineEdges, entities, aliases, turnGuesses, timelineAnchors, aliasMentions }
+  return { characters, sentences, spans, discourseLinks, timelineEvents, timelineEdges, entities, aliases, turnGuesses, timelineAnchors, aliasMentions, diagnostics }
 }
 
 function sentenceRow(sentence: Sentence, location: SentenceLocation, paragraphIdx: number, idx: number): SentenceRow {
