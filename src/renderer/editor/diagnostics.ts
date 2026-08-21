@@ -20,6 +20,9 @@ export type DiagnosticItem = {
   from: number
   to: number
   detail: string
+  // The sidecar's resolved name, when the local model answered — the fix then
+  // writes it directly instead of opening the cast list.
+  suggest?: string
 }
 
 export const setDiagnostics = StateEffect.define<readonly DiagnosticItem[]>()
@@ -175,7 +178,7 @@ function cardDom(item: DiagnosticItem, word: string): HTMLElement {
   body.textContent = bodyOf(item, word)
   dom.appendChild(body)
 
-  const fix = fixOf(item.kind, word)
+  const fix = fixOf(item, word)
 
   switch (fix === null) {
     case true:
@@ -232,12 +235,14 @@ function bodyOf(item: DiagnosticItem, word: string): string {
   }
 }
 
-function fixOf(kind: string, word: string): string | null {
-  switch (kind) {
+// The card's fix line: a sidecar suggestion writes the concrete name — the
+// author reads exactly what Enter will do before pressing it.
+function fixOf(item: DiagnosticItem, word: string): string | null {
+  switch (item.kind) {
     case "unresolved-pronoun":
-      return `{${word}}[…]`
+      return `{${word}}[${item.suggest ?? "…"}]`
     case "empty-binding":
-      return "[…]"
+      return `[${item.suggest ?? "…"}]`
     case "unresolved-name":
       return `character: ${word}`
     case "unstitched-chapter":
@@ -285,6 +290,26 @@ function applyFix(view: EditorView): boolean {
           break
       }
 
+      // A sidecar answer writes the whole glyph at once — the card showed the
+      // name, Enter is the consent.
+      const suggest = active!.suggest
+
+      switch (suggest === undefined) {
+        case false: {
+          const whole = `{${word}}[${suggest}]`
+
+          view.dispatch({
+            changes: { from: active!.from, to: active!.to, insert: whole },
+            selection: { anchor: active!.from + whole.length },
+            effects: dismissed,
+            userEvent: "input.complete",
+          })
+          return true
+        }
+        case true:
+          break
+      }
+
       const insert = `{${word}}[]`
 
       view.dispatch({
@@ -298,7 +323,8 @@ function applyFix(view: EditorView): boolean {
       return true
     }
     case "empty-binding": {
-      // The glyph exists; land inside its brackets and offer the cast.
+      // The glyph exists; land inside its brackets — filled by the sidecar's
+      // answer when one arrived, offered the cast when not.
       const raw = view.state.sliceDoc(active!.from, active!.to)
       const open = raw.lastIndexOf("[")
 
@@ -306,6 +332,22 @@ function applyFix(view: EditorView): boolean {
         case true:
           return false
         case false:
+          break
+      }
+
+      const suggest = active!.suggest
+
+      switch (suggest === undefined) {
+        case false: {
+          view.dispatch({
+            changes: { from: active!.from + open + 1, to: active!.from + open + 1, insert: suggest },
+            selection: { anchor: active!.from + open + 1 + suggest!.length + 1 },
+            effects: dismissed,
+            userEvent: "input.complete",
+          })
+          return true
+        }
+        case true:
           break
       }
 

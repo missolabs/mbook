@@ -31,9 +31,18 @@ import type { Lingua } from "../lingua"
 import type { DictLang } from "../lingua-paths"
 import { analysisToRows } from "./lower"
 import type { BookRecord, LinguaStore, StoreError } from "./store"
+import { pickModel, suggestFixes, suggestTargets } from "./suggester"
+import type { DiagnosticPayload, SuggestDeps } from "./suggester"
 
 const latest = new Map<string, string>()
 const running = new Set<string>()
+
+// The suggestion pass is slower than typing: each analysis bumps the path's
+// generation, and a pass that finishes under a stale generation drops its
+// answer instead of re-emitting outdated coordinates.
+const suggestGeneration = new Map<string, number>()
+
+const OLLAMA: SuggestDeps = { fetch: globalThis.fetch, base: "http://127.0.0.1:11434" }
 
 // Fire-and-forget: record the newest content for this path and, unless a run is
 // already draining it, kick one off on the next tick so the caller's save
@@ -100,15 +109,14 @@ async function runOnce(path: string, content: string): Promise<void> {
 
   // The compiler asks: stream the notes to the editor even when the store
   // skips an unchanged book — the renderer may have just reopened it.
-  emitEvent("evt:diagnostics", {
-    path,
-    items: analysis.value.diagnostics.map((d) => ({
-      kind: d.kind,
-      from: d.charFrom,
-      to: d.charTo,
-      detail: d.detail,
-    })),
-  })
+  const items = analysis.value.diagnostics.map((d) => ({
+    kind: d.kind,
+    from: d.charFrom,
+    to: d.charTo,
+    detail: d.detail,
+  }))
+
+  emitEvent("evt:diagnostics", { path, items })
 
   emitEvent("evt:cast", {
     path,
@@ -118,6 +126,10 @@ async function runOnce(path: string, content: string): Promise<void> {
       gender: m.gender,
     })),
   })
+
+  const generation = (suggestGeneration.get(path) ?? 0) + 1
+  suggestGeneration.set(path, generation)
+  void suggestPass(path, content, analysis.value, items, generation)
 
   const opened = await loadStore(dbPath())
 
@@ -166,6 +178,47 @@ function persist(
   } finally {
     store.close()
   }
+}
+
+// The slow half of the lint surface: the sidecar answers the diagnostics the
+// deterministic engine could not, and the SAME evt:diagnostics fires again
+// with `suggest` fields riding the unchanged items. Everything that can go
+// wrong — no Ollama, no model, every answer "incerto", a newer analysis
+// landing first — resolves to not emitting, never to an error.
+async function suggestPass(
+  path: string,
+  content: string,
+  analysis: BookAnalysis,
+  items: readonly DiagnosticPayload[],
+  generation: number,
+): Promise<void> {
+  switch (suggestTargets(items).length === 0) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  const model = await pickModel(OLLAMA)
+
+  switch (model.kind) {
+    case "none":
+      return
+    case "some":
+      break
+  }
+
+  const suggested = await suggestFixes(OLLAMA, model.value, content, analysis.castMembers, items)
+
+  switch (suggested.answered === 0 || suggestGeneration.get(path) !== generation) {
+    case true:
+      return
+    case false:
+      break
+  }
+
+  console.log(`[mbook] ${suggested.answered} suggestion(s) for ${path} via ${model.value}`)
+  emitEvent("evt:diagnostics", { path, items: [...suggested.items] })
 }
 
 // Bind the pipeline to whatever the composition root has loaded: a book's

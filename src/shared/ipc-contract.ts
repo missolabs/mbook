@@ -110,6 +110,9 @@ export const eventPayload = {
         from: z.number(),
         to: z.number(),
         detail: z.string(),
+        // The sidecar's answer, when a local model resolved the reference —
+        // rides a second emission of the same set, ~seconds later.
+        suggest: z.string().optional(),
       }),
     ),
   }),
